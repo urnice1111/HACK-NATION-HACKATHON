@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from backend.app.graph.risk import apply_artifact, check_test_vectors
 from contracts.models import Answer, InformationNeed, ReportCreate, RiskModelArtifact
 
 CONTRACTS = Path(__file__).parent.parent / "contracts"
@@ -13,32 +14,16 @@ def load(name: str) -> dict:
     return json.loads((CONTRACTS / name).read_text())
 
 
-def reference_score(artifact: RiskModelArtifact, inputs: dict) -> tuple[float | None, str]:
-    """Section 5.2 formula, used only to check the fixture's test vectors."""
-    features = {f.name: f for f in artifact.features}
-    if any(f.required and inputs.get(name) is None for name, f in features.items()):
-        return None, "unknown"
-    raw = artifact.intercept + sum(
-        f.coef * (inputs[name] - f.mean) / f.std for name, f in features.items() if inputs.get(name) is not None
-    )
-    low, high = artifact.score_range
-    score = min(max(raw, low), high)
-    if score >= artifact.cutoffs.high:
-        return score, "high"
-    if score >= artifact.cutoffs.medium:
-        return score, "medium"
-    return score, "low"
-
-
 def test_heuristic_artifact_reproduces_its_test_vectors():
     artifact = RiskModelArtifact.model_validate(load("fixtures/risk_model_heuristic.json"))
-    for vector in artifact.test_vectors:
-        score, priority = reference_score(artifact, vector.input)
-        assert priority == vector.expected_priority
-        if vector.expected_score is None:
-            assert score is None
-        else:
-            assert score == pytest.approx(vector.expected_score, abs=1e-4)
+    assert check_test_vectors(artifact) == []
+
+
+def test_missing_required_feature_is_unknown_not_low():
+    artifact = RiskModelArtifact.model_validate(load("fixtures/risk_model_heuristic.json"))
+    result = apply_artifact(artifact, {"humidity_mean_14d": None, "rain_anomaly_30d": 0.1})
+    assert (result.score, result.priority) == (None, "unknown")
+    assert "humidity_mean_14d" in result.missing_features
 
 
 def test_need_catalog_entries_fit_information_need():

@@ -1,0 +1,82 @@
+{
+  "$defs": {
+    "ContactConsent": {
+      "description": "null = never asked; false = denied or revoked.",
+      "properties": {
+        "reports": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reports"
+        },
+        "notifications": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notifications"
+        },
+        "followup_calls": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Followup Calls"
+        },
+        "consent_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Consent At"
+        }
+      },
+      "required": [
+        "reports",
+        "notifications",
+        "followup_calls",
+        "consent_at"
+      ],
+      "title": "ContactConsent",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "farmer_id": {
+      "title": "Farmer Id",
+      "type": "string"
+    },
+    "consent": {
+      "$ref": "#/$defs/ContactConsent"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "farmer_id",
+    "consent",
+    "is_demo"
+  ],
+  "title": "ConsentRecorded",
+  "type": "object"
+}

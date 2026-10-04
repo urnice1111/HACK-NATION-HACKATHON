@@ -82,24 +82,22 @@
               "type": "number"
             },
             {
-              "type": "null"
-            }
-          ],
-          "title": "Value"
-        },
-        "unit": {
-          "anyOf": [
-            {
               "type": "string"
             },
             {
               "type": "null"
             }
           ],
-          "title": "Unit"
+          "title": "Value"
+        },
+        "unit": {
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
         },
         "sample_type": {
-          "$ref": "#/$defs/SampleType"
+          "title": "Sample Type",
+          "type": "string"
         },
         "measured_at": {
           "anyOf": [
@@ -239,16 +237,6 @@
       },
       "title": "PlotContextLite",
       "type": "object"
-    },
-    "SampleType": {
-      "enum": [
-        "soil",
-        "irrigation_water",
-        "leaf",
-        "other"
-      ],
-      "title": "SampleType",
-      "type": "string"
     }
   },
   "additionalProperties": false,

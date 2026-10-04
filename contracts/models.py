@@ -3,10 +3,10 @@
 Unknown values are `None`, never 0. Request bodies reject unknown fields.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 from contracts.enums import (
     SCHEMA_VERSION,
@@ -33,6 +33,17 @@ Unit = Annotated[float, Field(ge=0, le=1)]
 Latitude = Annotated[float, Field(ge=-90, le=90)]
 Longitude = Annotated[float, Field(ge=-180, le=180)]
 SchemaVersion = Literal["2.0"]
+PhoneE164 = Annotated[str, Field(pattern=r"^\+[1-9][0-9]{1,14}$")]
+
+
+def _utc_z(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+# ISO 8601 in UTC with a "Z" suffix (communications validates with zod `iso.datetime({offset: false})`).
+UtcDatetime = Annotated[datetime, PlainSerializer(_utc_z, return_type=str)]
 
 
 class Request(BaseModel):
@@ -68,9 +79,9 @@ class ErrorResponse(Response):
 
 class Measurement(Request):
     name: str
-    value: float | None
-    unit: str | None
-    sample_type: SampleType
+    value: float | str | None
+    unit: str = Field(min_length=1)
+    sample_type: str  # suggested: SampleType values (soil, irrigation_water, leaf, other)
     measured_at: datetime | None = None
     method: str | None = None
     source: MeasurementSource = MeasurementSource.farmer_reported
@@ -90,77 +101,142 @@ class Answer(Request):
         return self
 
 
-# --- Contact resolution and plot context ----------------------------------------------
+# --- Contact resolution, consents and plot context ---------------------------------------
+# Shapes agreed with integrante 1 (communications/src/contracts/resources.ts).
 
 
 class ContactResolutionRequest(Request):
-    phone_e164: str = Field(pattern=r"^\+[1-9][0-9]{7,14}$")
+    """Step 1 without confirm_candidate_token -> candidates. Step 2 with it -> confirmed farmer."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
     session_id: str
+    phone_e164: PhoneE164
+    channel: Literal["voice", "sms"] = "voice"
+    confirm_candidate_token: str | None = None
+    is_demo: bool = True
 
 
 class ContactCandidate(Response):
-    """Minimal label only; personal data is released after confirmation."""
+    """Minimal label to ask "¿hablo con…?"; nothing else from the record."""
 
     candidate_token: str
     label: str
 
 
-class ContactResolutionResponse(Response):
-    candidates: list[ContactCandidate]
-    requires_confirmation: bool
+class ContactConsent(Response):
+    """null = never asked; false = denied or revoked."""
 
-
-class ContactConfirmRequest(Request):
-    candidate_token: str
-    session_id: str
+    reports: bool | None
+    notifications: bool | None
+    followup_calls: bool | None
+    consent_at: UtcDatetime | None
 
 
 class ConfirmedPlot(Response):
     plot_id: str
-    name: str
+    label: str
 
 
-class ContactConfirmResponse(Response):
+class ConfirmedFarmer(Response):
     farmer_id: str
-    farmer_name: str
     preferred_language: str
+    timezone: str
+    consent: ContactConsent
     plots: list[ConfirmedPlot]
-    notification_consent: bool
-    followup_call_consent: bool
+
+
+class ContactResolutionResponse(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    session_id: str
+    resolution_status: Literal["no_match", "candidates", "confirmed"]
+    requires_confirmation: bool
+    is_shared_phone: bool
+    candidates: list[ContactCandidate]
+    confirmed: ConfirmedFarmer | None
+    is_demo: bool
+
+
+class ConsentRequest(Request):
+    """Each permission null = not asked in this session (previous value kept)."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    session_id: str
+    farmer_id: str
+    channel: Literal["voice", "sms"]
+    reports: bool | None = None
+    notifications: bool | None = None
+    followup_calls: bool | None = None
+    provider_reference: str | None = None
+    is_demo: bool = True
+
+
+class ConsentRecorded(Response):
+    farmer_id: str
+    consent: ContactConsent
+    is_demo: bool
+
+
+RevocableScope = Literal["notifications", "followup_calls"]
+
+
+class ConsentRevocationRequest(Request):
+    """"BAJA" by SMS revokes for every contact with that phone."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    phone_e164: PhoneE164
+    channel: Literal["sms"] = "sms"
+    scopes: list[RevocableScope] = Field(min_length=1)
+    provider_reference: str | None = None
+    is_demo: bool = True
+
+
+class ConsentRevoked(Response):
+    contacts_updated: int
+    scopes: list[RevocableScope]
+    is_demo: bool
 
 
 class ActiveCase(Response):
     case_id: str
     threat_code: str
     status: str
-    opened_at: datetime
-    last_observation_at: datetime | None
+    opened_at: UtcDatetime
+    last_observation_at: UtcDatetime | None
 
 
-class CurrentRisk(Response):
-    threat_code: str
-    inspection_priority: InspectionPriority
-    score: Unit | None
-    reasons: list[str] = []
-    model_version: str | None
-    heuristic: bool
+class PendingFollowup(Response):
+    followup_id: str
+    case_id: str
+    due_at: UtcDatetime
+    status: str
+
+
+class EnvFeature(Response):
+    name: str
+    value: float | None
+    unit: str
 
 
 class EnvironmentSummary(Response):
-    computed_at: datetime | None
-    features: dict[str, Any]
+    computed_at: UtcDatetime
     data_freshness: DataFreshness
+    features: list[EnvFeature]
+    dataset_ids: list[str] = []
 
 
 class PlotContext(Response):
+    """No coordinates or contact data: this goes to the voice agent."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
     plot_id: str
-    name: str
+    label: str
     crop: str | None
     variety: str | None
     altitude_m: float | None
+    data_freshness: DataFreshness
+    environment_summary: EnvironmentSummary | None
     active_cases: list[ActiveCase]
-    risk: list[CurrentRisk]
-    environment_summary: EnvironmentSummary
+    pending_followups: list[PendingFollowup]
     is_demo: bool
 
 
@@ -321,7 +397,7 @@ class ResolvedCaseResult(Response):
     threat_code: str
     similarity: Unit
     distance_band: str | None
-    resolved_at: datetime
+    resolved_at: UtcDatetime
     days_to_resolution: int | None
     solution_summary: str
     solution_codes: list[str] | None
@@ -354,7 +430,7 @@ class FollowUpResponseResult(Response):
     case_id: str
     case_status: str
     resolution_id: str | None
-    next_followup_at: datetime | None
+    next_followup_at: UtcDatetime | None
 
 
 # --- 10.5 Reports ----------------------------------------------------------------
@@ -363,7 +439,8 @@ class FollowUpResponseResult(Response):
 class ReportCreate(Request):
     schema_version: SchemaVersion = SCHEMA_VERSION
     session_id: str
-    plot_id: str
+    # null = minimal registration from an unknown number; never a random plot.
+    plot_id: str | None
     case_id: str | None = None
     channel: Channel
     provider_reference: str | None = None
@@ -378,10 +455,39 @@ class ReportCreate(Request):
 
 class ReportCreated(Response):
     report_id: str
-    case_id: str
-    received_at: datetime
+    case_id: str | None
+    received_at: UtcDatetime
     processing_status: ProcessingStatus
     correlation_id: str
+
+
+class ReportMeasurement(Response):
+    name: str
+    value: float | str | None
+    unit: str
+    sample_type: str
+    measured_at: UtcDatetime | None
+    method: str | None
+    source: MeasurementSource
+
+
+class ReportDetail(Response):
+    report_id: str
+    case_id: str | None
+    plot_id: str | None
+    session_id: str
+    channel: Channel
+    provider_reference: str | None
+    observed_at: UtcDatetime | None
+    received_at: UtcDatetime
+    symptoms: list[str]
+    measurements: list[ReportMeasurement]
+    user_statement: str
+    completeness: Completeness
+    assessment_id: str | None
+    processing_status: ProcessingStatus
+    created_at: UtcDatetime
+    is_demo: bool
 
 
 # --- 10.6 Graph --------------------------------------------------------------------
@@ -425,7 +531,7 @@ class GraphEdge(Response):
 class GraphResponse(Response):
     schema_version: SchemaVersion = SCHEMA_VERSION
     graph_version: int
-    generated_at: datetime
+    generated_at: UtcDatetime
     threat_code: str
     nodes: list[GraphNode]
     edges: list[GraphEdge]
@@ -439,6 +545,42 @@ class AlertReview(Request):
     expected_version: int = Field(ge=1)
     reason: str | None = None
     message: str | None = None
+
+
+class AlertNotification(Response):
+    notification_id: str
+    channel: str
+    status: str
+    attempt_count: int
+    last_error: str | None
+
+
+class AlertOut(Response):
+    """Alert for the operator queue. Recipient is a label only; no phone numbers."""
+
+    alert_id: str
+    plot_id: str
+    plot_label: str
+    recipient_label: str
+    threat_code: str
+    status: str
+    version: int
+    message: str | None
+    inspection_priority: InspectionPriority
+    score: Unit | None
+    reasons: list[str] = []
+    risk_evaluation_id: str
+    created_at: UtcDatetime
+    review_reason: str | None
+    approved_by: str | None
+    approved_at: UtcDatetime | None
+    notifications: list[AlertNotification] = []
+    is_demo: bool
+
+
+class AlertList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    alerts: list[AlertOut]
 
 
 # --- Risk model artifact (producer: integrante 2) --------------------------------------
@@ -499,7 +641,7 @@ class OutboxEvent(Response):
     event_id: str
     schema_version: SchemaVersion = SCHEMA_VERSION
     event_type: str
-    occurred_at: datetime
+    occurred_at: UtcDatetime
     aggregate_id: str
     aggregate_version: int
     correlation_id: str | None

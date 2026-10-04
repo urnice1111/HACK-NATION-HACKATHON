@@ -1,15 +1,11 @@
 {
   "additionalProperties": false,
-  "description": "Step 1 without confirm_candidate_token -> candidates. Step 2 with it -> confirmed farmer.",
+  "description": "\"BAJA\" by SMS revokes for every contact with that phone.",
   "properties": {
     "schema_version": {
       "const": "2.0",
       "default": "2.0",
       "title": "Schema Version",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "Session Id",
       "type": "string"
     },
     "phone_e164": {
@@ -18,15 +14,24 @@
       "type": "string"
     },
     "channel": {
-      "default": "voice",
-      "enum": [
-        "voice",
-        "sms"
-      ],
+      "const": "sms",
+      "default": "sms",
       "title": "Channel",
       "type": "string"
     },
-    "confirm_candidate_token": {
+    "scopes": {
+      "items": {
+        "enum": [
+          "notifications",
+          "followup_calls"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Scopes",
+      "type": "array"
+    },
+    "provider_reference": {
       "anyOf": [
         {
           "type": "string"
@@ -36,7 +41,7 @@
         }
       ],
       "default": null,
-      "title": "Confirm Candidate Token"
+      "title": "Provider Reference"
     },
     "is_demo": {
       "default": true,
@@ -45,9 +50,9 @@
     }
   },
   "required": [
-    "session_id",
-    "phone_e164"
+    "phone_e164",
+    "scopes"
   ],
-  "title": "ContactResolutionRequest",
+  "title": "ConsentRevocationRequest",
   "type": "object"
 }
