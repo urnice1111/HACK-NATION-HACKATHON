@@ -141,7 +141,7 @@ insert into public.followups (id, is_demo, case_id, due_at, status, channel, att
   ('followup_demo_r3', true, 'case_demo_r3', now() - interval '45 days', 'responded', 'voice', 1, 'call-demo-r3', 'report_demo_r3');
 
 insert into public.notifications (id, is_demo, alert_id, followup_id, contact_id, channel, status, provider_reference, attempt_count, last_error) values
-  ('notification_demo_01', true, 'alert_demo_01', null, 'contact_demo_01', 'sms', 'failed', 'provider-demo-n01', 3, 'Twilio 30003: destino no disponible'),
+  ('notification_demo_01', true, 'alert_demo_01', null, 'contact_demo_01', 'voice', 'failed', 'provider-demo-n01', 3, 'no_answer'),
   ('notification_demo_02', true, null, 'followup_demo_02', 'contact_demo_03', 'sms', 'delivered', 'provider-demo-n02', 1, null);
 
 -- Resolved cases: one verified, one farmer_reported, one that mentions a product and dose

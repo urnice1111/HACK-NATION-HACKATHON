@@ -22,6 +22,7 @@ from contracts.enums import (
     InspectionPriority,
     LocalCaseStatus,
     MeasurementSource,
+    NotificationStatus,
     ProcessingStatus,
     SampleType,
     StatusReported,
@@ -774,6 +775,65 @@ class AlertOut(Response):
 class AlertList(Response):
     schema_version: SchemaVersion = SCHEMA_VERSION
     alerts: list[AlertOut]
+
+
+# --- Alert notifications (voice delivery, section 17) ----------------------------------
+
+
+class NotificationContact(Response):
+    phone_e164: str
+    preferred_language: str
+    timezone: str
+    allowed_hours: AllowedHours | None
+    notification_consent: bool
+
+
+class NotificationListItem(Response):
+    """Queue item for the communications "Alerts" voice agent. `message` is the approved alert text."""
+
+    notification_id: str
+    alert_id: str
+    plot_id: str
+    plot_label: str
+    farmer_name: str
+    channel: Literal["voice", "sms"]
+    status: NotificationStatus
+    attempt_count: int
+    provider_reference: str | None
+    message: str | None
+    contact: NotificationContact
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    is_demo: bool
+
+
+class NotificationList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    notifications: list[NotificationListItem]
+    next_cursor: str | None = None
+    is_demo: bool
+
+
+class NotificationStatusUpdate(Request):
+    """`delivered` = the farmer confirmed on the call that they heard the alert; never "read" or "acted on"."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    status: Literal["sending", "accepted", "delivered", "failed", "unknown", "cancelled"]
+    provider_reference: str | None = None
+    error_code: str | None = None
+    occurred_at: datetime
+    is_demo: bool
+
+
+class NotificationStatusRecorded(Response):
+    """`applied: false` = the notification was already terminal; nothing changed."""
+
+    notification_id: str
+    status: NotificationStatus
+    attempt_count: int
+    provider_reference: str | None
+    applied: bool
+    is_demo: bool
 
 
 # --- Risk model artifact (producer: integrante 2) --------------------------------------
