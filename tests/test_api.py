@@ -1,24 +1,13 @@
 """API tests against the local demo database (docker compose up -d db && backend/scripts/reset_db.sh)."""
 
-import psycopg
 import pytest
-from fastapi.testclient import TestClient
-
-from backend.app.config import settings
-from backend.app.main import app
-
-try:
-    psycopg.connect(settings.database_url, connect_timeout=2).close()
-except psycopg.OperationalError:
-    pytest.skip("demo database not running", allow_module_level=True)
 
 SHARED_PHONE = "+525500000001"
 
 
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:
-        yield c
+@pytest.fixture(scope="module", autouse=True)
+def _seeded(fresh_db):
+    pass
 
 
 def assert_uniform_error(resp, status, code):
