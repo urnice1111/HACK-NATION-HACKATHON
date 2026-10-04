@@ -1,0 +1,310 @@
+{
+  "$defs": {
+    "Answer": {
+      "additionalProperties": false,
+      "properties": {
+        "need_code": {
+          "title": "Need Code",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "raw_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Text"
+        },
+        "unknown": {
+          "default": false,
+          "title": "Unknown",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "need_code",
+        "value"
+      ],
+      "title": "Answer",
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "partial",
+        "sufficient"
+      ],
+      "title": "Completeness",
+      "type": "string"
+    },
+    "Measurement": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit"
+        },
+        "sample_type": {
+          "$ref": "#/$defs/SampleType"
+        },
+        "measured_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured At"
+        },
+        "method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Method"
+        },
+        "source": {
+          "$ref": "#/$defs/MeasurementSource",
+          "default": "farmer_reported"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit",
+        "sample_type"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
+    "MeasurementSource": {
+      "enum": [
+        "farmer_reported",
+        "sensor",
+        "technician"
+      ],
+      "title": "MeasurementSource",
+      "type": "string"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        },
+        "symptoms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Symptoms",
+          "type": "array"
+        },
+        "user_statement": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Statement"
+        },
+        "measurements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "answers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Answer"
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "completeness": {
+          "$ref": "#/$defs/Completeness",
+          "default": "partial"
+        }
+      },
+      "title": "Observation",
+      "type": "object"
+    },
+    "PlotContextLite": {
+      "additionalProperties": false,
+      "properties": {
+        "crop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop"
+        },
+        "variety": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Variety"
+        }
+      },
+      "title": "PlotContextLite",
+      "type": "object"
+    },
+    "SampleType": {
+      "enum": [
+        "soil",
+        "irrigation_water",
+        "leaf",
+        "other"
+      ],
+      "title": "SampleType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "plot_id": {
+      "title": "Plot Id",
+      "type": "string"
+    },
+    "language": {
+      "default": "es",
+      "title": "Language",
+      "type": "string"
+    },
+    "observation": {
+      "$ref": "#/$defs/Observation"
+    },
+    "asked_need_codes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Asked Need Codes",
+      "type": "array"
+    },
+    "plot_context": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlotContextLite"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "plot_id",
+    "observation",
+    "is_demo"
+  ],
+  "title": "AssessmentRequest",
+  "type": "object"
+}

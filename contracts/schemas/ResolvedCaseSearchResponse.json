@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "ResolvedCaseResult": {
+      "description": "Never carries plot_id, farmer name, phone or coordinates.",
+      "properties": {
+        "resolution_id": {
+          "title": "Resolution Id",
+          "type": "string"
+        },
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "similarity": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Similarity",
+          "type": "number"
+        },
+        "distance_band": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Distance Band"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        },
+        "days_to_resolution": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Days To Resolution"
+        },
+        "solution_summary": {
+          "title": "Solution Summary",
+          "type": "string"
+        },
+        "solution_codes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Solution Codes"
+        },
+        "matches_protocol": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matches Protocol"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        }
+      },
+      "required": [
+        "resolution_id",
+        "threat_code",
+        "similarity",
+        "distance_band",
+        "resolved_at",
+        "days_to_resolution",
+        "solution_summary",
+        "solution_codes",
+        "matches_protocol",
+        "verification"
+      ],
+      "title": "ResolvedCaseResult",
+      "type": "object"
+    },
+    "Verification": {
+      "enum": [
+        "farmer_reported",
+        "verified",
+        "disputed"
+      ],
+      "title": "Verification",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "results": {
+      "items": {
+        "$ref": "#/$defs/ResolvedCaseResult"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "results"
+  ],
+  "title": "ResolvedCaseSearchResponse",
+  "type": "object"
+}

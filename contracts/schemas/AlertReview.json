@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "AlertDecision": {
+      "enum": [
+        "approve",
+        "reject"
+      ],
+      "title": "AlertDecision",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "$ref": "#/$defs/AlertDecision"
+    },
+    "expected_version": {
+      "minimum": 1,
+      "title": "Expected Version",
+      "type": "integer"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message"
+    }
+  },
+  "required": [
+    "decision",
+    "expected_version"
+  ],
+  "title": "AlertReview",
+  "type": "object"
+}

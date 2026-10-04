@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "ActionWorked": {
+      "enum": [
+        "yes",
+        "no",
+        "partial",
+        "unknown"
+      ],
+      "title": "ActionWorked",
+      "type": "string"
+    },
+    "Channel": {
+      "enum": [
+        "voice",
+        "sms",
+        "operator"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "StatusReported": {
+      "enum": [
+        "worse",
+        "same",
+        "improved",
+        "resolved",
+        "unknown"
+      ],
+      "title": "StatusReported",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "channel": {
+      "$ref": "#/$defs/Channel"
+    },
+    "status_reported": {
+      "$ref": "#/$defs/StatusReported"
+    },
+    "user_statement": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "User Statement"
+    },
+    "actions_taken": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actions Taken"
+    },
+    "action_worked": {
+      "$ref": "#/$defs/ActionWorked",
+      "default": "unknown"
+    },
+    "change_noticed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Change Noticed At"
+    },
+    "provider_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Reference"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "channel",
+    "status_reported",
+    "is_demo"
+  ],
+  "title": "FollowUpResponseRequest",
+  "type": "object"
+}

@@ -1,0 +1,326 @@
+{
+  "$defs": {
+    "AnswerType": {
+      "enum": [
+        "yes_no",
+        "number_with_unit",
+        "choice",
+        "free_text"
+      ],
+      "title": "AnswerType",
+      "type": "string"
+    },
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "DataUsed": {
+      "properties": {
+        "query_id": {
+          "title": "Query Id",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "data_freshness": {
+          "$ref": "#/$defs/DataFreshness"
+        },
+        "dataset_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dataset Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_id",
+        "summary",
+        "data_freshness"
+      ],
+      "title": "DataUsed",
+      "type": "object"
+    },
+    "Disposition": {
+      "enum": [
+        "ask_more",
+        "advise",
+        "refer"
+      ],
+      "title": "Disposition",
+      "type": "string"
+    },
+    "EvidenceQuality": {
+      "enum": [
+        "insufficient",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "EvidenceQuality",
+      "type": "string"
+    },
+    "InformationNeed": {
+      "properties": {
+        "need_code": {
+          "title": "Need Code",
+          "type": "string"
+        },
+        "variable": {
+          "title": "Variable",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "farmer_hint": {
+          "title": "Farmer Hint",
+          "type": "string"
+        },
+        "answer_type": {
+          "$ref": "#/$defs/AnswerType"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        },
+        "priority": {
+          "minimum": 1,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "can_be_unknown": {
+          "default": true,
+          "title": "Can Be Unknown",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "need_code",
+        "variable",
+        "reason",
+        "farmer_hint",
+        "answer_type",
+        "priority"
+      ],
+      "title": "InformationNeed",
+      "type": "object"
+    },
+    "Recommendation": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "protocol_id": {
+          "title": "Protocol Id",
+          "type": "string"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "text",
+        "protocol_id"
+      ],
+      "title": "Recommendation",
+      "type": "object"
+    },
+    "ResolvedCaseMention": {
+      "properties": {
+        "resolution_id": {
+          "title": "Resolution Id",
+          "type": "string"
+        },
+        "summary_for_speech": {
+          "title": "Summary For Speech",
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        }
+      },
+      "required": [
+        "resolution_id",
+        "summary_for_speech",
+        "verification"
+      ],
+      "title": "ResolvedCaseMention",
+      "type": "object"
+    },
+    "SuspectedIssue": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "certainty": {
+          "const": "suspected",
+          "default": "suspected",
+          "title": "Certainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "label"
+      ],
+      "title": "SuspectedIssue",
+      "type": "object"
+    },
+    "Urgency": {
+      "enum": [
+        "unknown",
+        "routine",
+        "soon",
+        "urgent"
+      ],
+      "title": "Urgency",
+      "type": "string"
+    },
+    "Verification": {
+      "enum": [
+        "farmer_reported",
+        "verified",
+        "disputed"
+      ],
+      "title": "Verification",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "assessment_id": {
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "disposition": {
+      "$ref": "#/$defs/Disposition"
+    },
+    "suspected_issue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SuspectedIssue"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "evidence_quality": {
+      "$ref": "#/$defs/EvidenceQuality"
+    },
+    "urgency": {
+      "$ref": "#/$defs/Urgency"
+    },
+    "information_needs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/InformationNeed"
+      },
+      "title": "Information Needs",
+      "type": "array"
+    },
+    "data_used": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DataUsed"
+      },
+      "title": "Data Used",
+      "type": "array"
+    },
+    "resolved_case_mentions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ResolvedCaseMention"
+      },
+      "title": "Resolved Case Mentions",
+      "type": "array"
+    },
+    "recommendations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Recommendation"
+      },
+      "title": "Recommendations",
+      "type": "array"
+    },
+    "human_review_required": {
+      "default": false,
+      "title": "Human Review Required",
+      "type": "boolean"
+    },
+    "source_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "context_stale": {
+      "default": false,
+      "title": "Context Stale",
+      "type": "boolean"
+    },
+    "model_version": {
+      "title": "Model Version",
+      "type": "string"
+    },
+    "protocol_version": {
+      "title": "Protocol Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "assessment_id",
+    "disposition",
+    "evidence_quality",
+    "urgency",
+    "model_version",
+    "protocol_version"
+  ],
+  "title": "AssessmentResponse",
+  "type": "object"
+}

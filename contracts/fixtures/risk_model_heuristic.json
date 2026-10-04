@@ -1,0 +1,47 @@
+{
+  "model_id": "risk_linear",
+  "model_version": "0.1.0-heuristic",
+  "threat_code": "coffee_leaf_rust",
+  "target": "rust_pressure_index: presión de roya esperada en la parcela en los próximos 30 días, [0,1]. Coeficientes puestos a mano, sin entrenar.",
+  "trained_at": "2026-10-03T00:00:00Z",
+  "features": [
+    {"name": "humidity_mean_14d", "mean": 78.0, "std": 8.0, "coef": 0.08, "required": true},
+    {"name": "rain_anomaly_30d", "mean": 1.0, "std": 0.4, "coef": 0.06, "required": true},
+    {"name": "temp_optimal_days_14d", "mean": 6.0, "std": 4.0, "coef": 0.05, "required": true},
+    {"name": "neighbor_source_exposure", "mean": 0.3, "std": 0.4, "coef": 0.12, "required": true},
+    {"name": "direct_active_reports", "mean": 0.2, "std": 0.5, "coef": 0.15, "required": true}
+  ],
+  "intercept": 0.3,
+  "score_range": [0, 1],
+  "cutoffs": {"medium": 0.4, "high": 0.7},
+  "metrics": {"mae": null, "r2": null, "n_train": null, "n_test": null},
+  "labels_are_synthetic": true,
+  "heuristic": true,
+  "test_vectors": [
+    {
+      "input": {"humidity_mean_14d": 88.0, "rain_anomaly_30d": 1.8, "temp_optimal_days_14d": 11, "neighbor_source_exposure": 0.46, "direct_active_reports": 1},
+      "expected_score": 0.8705,
+      "expected_priority": "high"
+    },
+    {
+      "input": {"humidity_mean_14d": 86.0, "rain_anomaly_30d": 1.6, "temp_optimal_days_14d": 10, "neighbor_source_exposure": 0.68, "direct_active_reports": 0},
+      "expected_score": 0.574,
+      "expected_priority": "medium"
+    },
+    {
+      "input": {"humidity_mean_14d": 74.0, "rain_anomaly_30d": 0.9, "temp_optimal_days_14d": 5, "neighbor_source_exposure": 0.0, "direct_active_reports": 0},
+      "expected_score": 0.0825,
+      "expected_priority": "low"
+    },
+    {
+      "input": {"humidity_mean_14d": 65.0, "rain_anomaly_30d": 0.5, "temp_optimal_days_14d": 2, "neighbor_source_exposure": 0.0, "direct_active_reports": 0},
+      "expected_score": 0.0,
+      "expected_priority": "low"
+    },
+    {
+      "input": {"humidity_mean_14d": null, "rain_anomaly_30d": 1.2, "temp_optimal_days_14d": 7, "neighbor_source_exposure": 0.2, "direct_active_reports": 0},
+      "expected_score": null,
+      "expected_priority": "unknown"
+    }
+  ]
+}

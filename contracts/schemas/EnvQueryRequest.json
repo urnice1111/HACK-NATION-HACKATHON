@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "Aggregation": {
+      "enum": [
+        "daily",
+        "weekly",
+        "sum",
+        "mean",
+        "min",
+        "max"
+      ],
+      "title": "Aggregation",
+      "type": "string"
+    },
+    "EnvVariableSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "aggregation": {
+          "$ref": "#/$defs/Aggregation"
+        }
+      },
+      "required": [
+        "code",
+        "aggregation"
+      ],
+      "title": "EnvVariableSpec",
+      "type": "object"
+    },
+    "EnvWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "days_back": {
+          "maximum": 365,
+          "minimum": 1,
+          "title": "Days Back",
+          "type": "integer"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        }
+      },
+      "required": [
+        "days_back"
+      ],
+      "title": "EnvWindow",
+      "type": "object"
+    },
+    "PlotTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "plot_id": {
+          "title": "Plot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plot_id"
+      ],
+      "title": "PlotTarget",
+      "type": "object"
+    },
+    "PointTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ],
+      "title": "PointTarget",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "query_id": {
+      "title": "Query Id",
+      "type": "string"
+    },
+    "requested_by": {
+      "title": "Requested By",
+      "type": "string"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlotTarget"
+        },
+        {
+          "$ref": "#/$defs/PointTarget"
+        }
+      ],
+      "title": "Target"
+    },
+    "variables": {
+      "items": {
+        "$ref": "#/$defs/EnvVariableSpec"
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "title": "Variables",
+      "type": "array"
+    },
+    "window": {
+      "$ref": "#/$defs/EnvWindow"
+    },
+    "compare_to_normal": {
+      "default": false,
+      "title": "Compare To Normal",
+      "type": "boolean"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "query_id",
+    "requested_by",
+    "target",
+    "variables",
+    "window",
+    "is_demo"
+  ],
+  "title": "EnvQueryRequest",
+  "type": "object"
+}

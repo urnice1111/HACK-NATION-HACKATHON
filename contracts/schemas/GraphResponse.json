@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "Contribution": {
+      "properties": {
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "value"
+      ],
+      "title": "Contribution",
+      "type": "object"
+    },
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "GraphEdge": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "distance_km": {
+          "minimum": 0,
+          "title": "Distance Km",
+          "type": "number"
+        },
+        "environment_similarity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Environment Similarity"
+        },
+        "exposure_type": {
+          "title": "Exposure Type",
+          "type": "string"
+        },
+        "exposure_strength": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exposure Strength"
+        },
+        "missing_features": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Features",
+          "type": "array"
+        },
+        "rule_version": {
+          "title": "Rule Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "distance_km",
+        "environment_similarity",
+        "exposure_type",
+        "exposure_strength",
+        "rule_version"
+      ],
+      "title": "GraphEdge",
+      "type": "object"
+    },
+    "GraphNode": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        },
+        "inspection_priority": {
+          "$ref": "#/$defs/InspectionPriority"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "contributions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Contribution"
+          },
+          "title": "Contributions",
+          "type": "array"
+        },
+        "model_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Version"
+        },
+        "local_case_status": {
+          "$ref": "#/$defs/LocalCaseStatus"
+        },
+        "data_freshness": {
+          "$ref": "#/$defs/DataFreshness"
+        },
+        "risk_evaluation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Risk Evaluation Id"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "evidence_report_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Report Ids",
+          "type": "array"
+        },
+        "heuristic": {
+          "title": "Heuristic",
+          "type": "boolean"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "latitude",
+        "longitude",
+        "inspection_priority",
+        "score",
+        "model_version",
+        "local_case_status",
+        "data_freshness",
+        "risk_evaluation_id",
+        "heuristic",
+        "is_demo"
+      ],
+      "title": "GraphNode",
+      "type": "object"
+    },
+    "InspectionPriority": {
+      "enum": [
+        "unknown",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "InspectionPriority",
+      "type": "string"
+    },
+    "LocalCaseStatus": {
+      "enum": [
+        "none",
+        "reported",
+        "suspected",
+        "confirmed",
+        "monitoring",
+        "resolved"
+      ],
+      "title": "LocalCaseStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "graph_version": {
+      "title": "Graph Version",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "threat_code": {
+      "title": "Threat Code",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/GraphNode"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/GraphEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    }
+  },
+  "required": [
+    "graph_version",
+    "generated_at",
+    "threat_code",
+    "nodes",
+    "edges"
+  ],
+  "title": "GraphResponse",
+  "type": "object"
+}

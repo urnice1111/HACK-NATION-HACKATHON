@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "ProcessingStatus": {
+      "enum": [
+        "pending",
+        "processed",
+        "failed"
+      ],
+      "title": "ProcessingStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "report_id": {
+      "title": "Report Id",
+      "type": "string"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "received_at": {
+      "format": "date-time",
+      "title": "Received At",
+      "type": "string"
+    },
+    "processing_status": {
+      "$ref": "#/$defs/ProcessingStatus"
+    },
+    "correlation_id": {
+      "title": "Correlation Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "report_id",
+    "case_id",
+    "received_at",
+    "processing_status",
+    "correlation_id"
+  ],
+  "title": "ReportCreated",
+  "type": "object"
+}

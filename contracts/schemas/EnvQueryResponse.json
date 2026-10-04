@@ -1,0 +1,169 @@
+{
+  "$defs": {
+    "Aggregation": {
+      "enum": [
+        "daily",
+        "weekly",
+        "sum",
+        "mean",
+        "min",
+        "max"
+      ],
+      "title": "Aggregation",
+      "type": "string"
+    },
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "EnvResult": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "aggregation": {
+          "$ref": "#/$defs/Aggregation"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "normal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normal"
+        },
+        "anomaly_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anomaly Ratio"
+        },
+        "coverage": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Coverage",
+          "type": "number"
+        },
+        "missing_days": {
+          "minimum": 0,
+          "title": "Missing Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "code",
+        "unit",
+        "aggregation",
+        "value",
+        "coverage",
+        "missing_days"
+      ],
+      "title": "EnvResult",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "query_id": {
+      "title": "Query Id",
+      "type": "string"
+    },
+    "cell_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cell Id"
+    },
+    "distance_km": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Distance Km"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/EnvResult"
+      },
+      "title": "Results",
+      "type": "array"
+    },
+    "data_freshness": {
+      "$ref": "#/$defs/DataFreshness"
+    },
+    "latest_data_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Latest Data Date"
+    },
+    "dataset_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Dataset Ids",
+      "type": "array"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "query_id",
+    "cell_id",
+    "distance_km",
+    "results",
+    "data_freshness",
+    "latest_data_date",
+    "is_demo"
+  ],
+  "title": "EnvQueryResponse",
+  "type": "object"
+}

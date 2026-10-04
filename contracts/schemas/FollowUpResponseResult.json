@@ -1,0 +1,48 @@
+{
+  "properties": {
+    "report_id": {
+      "title": "Report Id",
+      "type": "string"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "case_status": {
+      "title": "Case Status",
+      "type": "string"
+    },
+    "resolution_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Resolution Id"
+    },
+    "next_followup_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Followup At"
+    }
+  },
+  "required": [
+    "report_id",
+    "case_id",
+    "case_status",
+    "resolution_id",
+    "next_followup_at"
+  ],
+  "title": "FollowUpResponseResult",
+  "type": "object"
+}

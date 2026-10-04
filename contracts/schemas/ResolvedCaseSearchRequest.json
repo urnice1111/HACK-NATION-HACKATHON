@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "threat_code": {
+      "title": "Threat Code",
+      "type": "string"
+    },
+    "symptoms": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Symptoms",
+      "type": "array"
+    },
+    "near_plot_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Near Plot Id"
+    },
+    "max_distance_km": {
+      "default": 20,
+      "exclusiveMinimum": 0,
+      "title": "Max Distance Km",
+      "type": "number"
+    },
+    "only_verified": {
+      "default": false,
+      "title": "Only Verified",
+      "type": "boolean"
+    },
+    "limit": {
+      "default": 5,
+      "maximum": 20,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "threat_code"
+  ],
+  "title": "ResolvedCaseSearchRequest",
+  "type": "object"
+}

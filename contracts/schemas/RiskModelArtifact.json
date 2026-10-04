@@ -1,0 +1,259 @@
+{
+  "$defs": {
+    "InspectionPriority": {
+      "enum": [
+        "unknown",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "InspectionPriority",
+      "type": "string"
+    },
+    "RiskCutoffs": {
+      "additionalProperties": false,
+      "properties": {
+        "medium": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Medium",
+          "type": "number"
+        },
+        "high": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "High",
+          "type": "number"
+        }
+      },
+      "required": [
+        "medium",
+        "high"
+      ],
+      "title": "RiskCutoffs",
+      "type": "object"
+    },
+    "RiskFeature": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "mean": {
+          "title": "Mean",
+          "type": "number"
+        },
+        "std": {
+          "exclusiveMinimum": 0,
+          "title": "Std",
+          "type": "number"
+        },
+        "coef": {
+          "title": "Coef",
+          "type": "number"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "mean",
+        "std",
+        "coef"
+      ],
+      "title": "RiskFeature",
+      "type": "object"
+    },
+    "RiskMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mae"
+        },
+        "r2": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "R2"
+        },
+        "n_train": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Train"
+        },
+        "n_test": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Test"
+        }
+      },
+      "title": "RiskMetrics",
+      "type": "object"
+    },
+    "RiskTestVector": {
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Input",
+          "type": "object"
+        },
+        "expected_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Score"
+        },
+        "expected_priority": {
+          "$ref": "#/$defs/InspectionPriority"
+        }
+      },
+      "required": [
+        "input",
+        "expected_score",
+        "expected_priority"
+      ],
+      "title": "RiskTestVector",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_version": {
+      "title": "Model Version",
+      "type": "string"
+    },
+    "threat_code": {
+      "title": "Threat Code",
+      "type": "string"
+    },
+    "target": {
+      "title": "Target",
+      "type": "string"
+    },
+    "trained_at": {
+      "format": "date-time",
+      "title": "Trained At",
+      "type": "string"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/RiskFeature"
+      },
+      "minItems": 1,
+      "title": "Features",
+      "type": "array"
+    },
+    "intercept": {
+      "title": "Intercept",
+      "type": "number"
+    },
+    "score_range": {
+      "default": [
+        0.0,
+        1.0
+      ],
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Score Range",
+      "type": "array"
+    },
+    "cutoffs": {
+      "$ref": "#/$defs/RiskCutoffs"
+    },
+    "metrics": {
+      "$ref": "#/$defs/RiskMetrics"
+    },
+    "labels_are_synthetic": {
+      "title": "Labels Are Synthetic",
+      "type": "boolean"
+    },
+    "heuristic": {
+      "title": "Heuristic",
+      "type": "boolean"
+    },
+    "test_vectors": {
+      "items": {
+        "$ref": "#/$defs/RiskTestVector"
+      },
+      "minItems": 1,
+      "title": "Test Vectors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "model_id",
+    "model_version",
+    "threat_code",
+    "target",
+    "trained_at",
+    "features",
+    "intercept",
+    "cutoffs",
+    "metrics",
+    "labels_are_synthetic",
+    "heuristic",
+    "test_vectors"
+  ],
+  "title": "RiskModelArtifact",
+  "type": "object"
+}

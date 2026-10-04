@@ -1,0 +1,88 @@
+{
+  "catalog_version": "coffee-rust-needs-v1",
+  "threat_code": "coffee_leaf_rust",
+  "needs": [
+    {
+      "need_code": "leaf_underside",
+      "variable": "Aspecto del envés de las hojas afectadas",
+      "why": "Polvo naranja indica roya; pelusa blanca, otro hongo; galerías, minador",
+      "farmer_hint": "Preguntar qué ve en la parte de abajo de las hojas: polvito naranja, pelusa, bichitos o nada",
+      "answer_type": "choice",
+      "options": ["polvo naranja o amarillo", "pelusa blanca", "insectos o galerías", "nada", "no sé"],
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "spot_appearance",
+      "variable": "Color y forma de las manchas",
+      "why": "Distingue roya de mancha de hierro y ojo de gallo",
+      "farmer_hint": "Preguntar de qué color son las manchas y si son redondas o con el centro claro",
+      "answer_type": "choice",
+      "options": ["manchas amarillas o naranjas", "manchas cafés con centro claro", "manchas redondas grises", "otro"],
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "affected_extent",
+      "variable": "Extensión de plantas afectadas",
+      "why": "Urgencia y tamaño del foco",
+      "farmer_hint": "Preguntar si son unas cuantas matas, una parte de la parcela o casi todo",
+      "answer_type": "choice",
+      "options": ["pocas plantas", "un sector", "casi toda la parcela", "no sé"],
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "leaf_drop",
+      "variable": "Caída de hojas",
+      "why": "La defoliación indica severidad alta",
+      "farmer_hint": "Preguntar si las matas están tirando hojas",
+      "answer_type": "yes_no",
+      "options": null,
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "symptom_onset_days",
+      "variable": "Días desde que notó los síntomas",
+      "why": "Ubica la observación en el tiempo",
+      "farmer_hint": "Preguntar hace cuántos días empezó a ver las manchas",
+      "answer_type": "number_with_unit",
+      "options": null,
+      "unit": "d",
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "coffee_variety",
+      "variable": "Variedad de café",
+      "why": "Typica, Bourbon y Caturra son más susceptibles que variedades tolerantes",
+      "farmer_hint": "Preguntar qué variedad de café tiene sembrada",
+      "answer_type": "free_text",
+      "options": null,
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "shade_level",
+      "variable": "Nivel de sombra en la parcela",
+      "why": "La sombra cambia el microclima de la parcela",
+      "farmer_hint": "Preguntar si el cafetal está a pleno sol, con poca sombra o con mucha sombra",
+      "answer_type": "choice",
+      "options": ["sin sombra", "poca", "mucha", "no sé"],
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "local_weather_perception",
+      "variable": "Lluvia y humedad recientes en la parcela",
+      "why": "Confirmar en la parcela lo que dicen los datos de la celda cercana",
+      "farmer_hint": "Preguntar cómo ha estado el clima estos días: si ha llovido, si ha estado nublado o húmedo",
+      "answer_type": "free_text",
+      "options": null,
+      "queryable_in_env": false
+    },
+    {
+      "need_code": "actions_taken",
+      "variable": "Acciones ya realizadas",
+      "why": "Evita repetir consejos y alimenta casos resueltos",
+      "farmer_hint": "Preguntar si ya hizo algo con las matas afectadas",
+      "answer_type": "free_text",
+      "options": null,
+      "queryable_in_env": false
+    }
+  ]
+}
