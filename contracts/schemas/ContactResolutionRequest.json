@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "phone_e164": {
+      "pattern": "^\\+[1-9][0-9]{7,14}$",
+      "title": "Phone E164",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "phone_e164",
+    "session_id"
+  ],
+  "title": "ContactResolutionRequest",
+  "type": "object"
+}
