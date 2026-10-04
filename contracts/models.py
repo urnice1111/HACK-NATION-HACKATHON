@@ -240,6 +240,35 @@ class PlotContext(Response):
     is_demo: bool
 
 
+class PlotTimelineEvent(Response):
+    """One thing that happened on the plot. No phone or farmer name."""
+
+    event_id: str
+    event_type: Literal[
+        "report.created",
+        "risk.updated",
+        "followup.due",
+        "followup.responded",
+        "case.resolved",
+    ]
+    occurred_at: UtcDatetime
+    summary: str
+    threat_code: str | None
+    case_id: str | None
+    report_id: str | None
+    followup_id: str | None
+    resolution_id: str | None
+    is_demo: bool
+
+
+class PlotTimeline(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    plot_id: str
+    events: list[PlotTimelineEvent]
+    next_cursor: str | None = None
+    is_demo: bool
+
+
 # --- 10.1 Assessments ---------------------------------------------------------
 
 
@@ -321,6 +350,30 @@ class AssessmentResponse(Response):
     context_stale: bool = False
     model_version: str
     protocol_version: str
+
+
+class PlotAssessment(Response):
+    """Dashboard view of a stored assessment: what the advisor looked at and said."""
+
+    assessment_id: str
+    report_id: str | None
+    created_at: UtcDatetime
+    disposition: Disposition
+    suspected_issue: SuspectedIssue | None = None
+    evidence_quality: EvidenceQuality
+    urgency: Urgency
+    data_used: list[DataUsed] = []
+    resolved_case_mentions: list[ResolvedCaseMention] = []
+    recommendations: list[Recommendation] = []
+    human_review_required: bool
+    model_version: str
+    protocol_version: str
+    is_demo: bool
+
+
+class PlotAssessmentList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    assessments: list[PlotAssessment]
 
 
 # --- 10.2 Environment query (owner: integrante 4) ---------------------------------
