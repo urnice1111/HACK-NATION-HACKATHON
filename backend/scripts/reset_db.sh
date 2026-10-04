@@ -28,4 +28,9 @@ if [[ "${SKIP_ENV_MOCK:-0}" != "1" ]]; then
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f backend/seed/env_mock.sql
 fi
 
+if [[ -f backend/seed/local_overrides.sql ]]; then
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f backend/seed/local_overrides.sql
+  echo "Applied backend/seed/local_overrides.sql"
+fi
+
 echo "Database reset with demo seed."

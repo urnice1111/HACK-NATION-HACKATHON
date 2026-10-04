@@ -7,6 +7,7 @@ from psycopg.types.json import Jsonb
 
 from backend.app.db import get_conn
 from backend.app.errors import ApiError
+from backend.app.followups import schedule_followup
 from backend.app.graph.engine import recalculate
 from backend.app.idempotency import idempotent, is_replay
 from contracts.enums import DEMO_THREAT_CODE, EventType
@@ -81,6 +82,7 @@ def create_report(
                 "update cases set last_observation_at = greatest(last_observation_at, %s) where id = %s",
                 (report["received_at"], case_id),
             )
+            schedule_followup(conn, case_id, body.is_demo)
         conn.execute(
             """
             insert into outbox_events (is_demo, event_type, aggregate_id, correlation_id, payload)

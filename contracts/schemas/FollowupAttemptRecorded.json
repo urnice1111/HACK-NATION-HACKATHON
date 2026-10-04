@@ -1,0 +1,28 @@
+{
+  "properties": {
+    "followup_id": {
+      "title": "Followup Id",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "attempt_count": {
+      "title": "Attempt Count",
+      "type": "integer"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "followup_id",
+    "status",
+    "attempt_count",
+    "is_demo"
+  ],
+  "title": "FollowupAttemptRecorded",
+  "type": "object"
+}
