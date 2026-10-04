@@ -1,5 +1,5 @@
 import { ApiError, type DashboardApi } from './client'
-import type { GraphResponse } from './types'
+import type { Alert, AlertNotification, GraphResponse } from './types'
 import graphFixture from '../mocks/graph.json'
 import { buildMockData } from '../mocks/mockData'
 import {
@@ -162,6 +162,33 @@ function snapshot(): DemoSnapshot {
   }
 }
 
+const findAlert = (id: string) => state.alerts.find((a) => a.id === id)
+
+// Approval queues one voice call; the mock then walks it through the states the Alerts agent
+// reports so polling shows the whole outcome. During the recorded demo the script drives it instead.
+function queueCall(alert: Alert) {
+  const notification: AlertNotification = {
+    notification_id: `notification_${alert.id}_${alert.notifications.length + 1}`,
+    channel: 'voice',
+    status: 'queued',
+    attempt_count: 0,
+    last_error: null,
+  }
+  alert.notifications.push(notification)
+  if (demoActive) return
+  const advance = (patch: Partial<AlertNotification>, ms: number) =>
+    deliveryTimers.push(
+      setTimeout(() => {
+        const current = findAlert(alert.id)?.notifications.find((n) => n.notification_id === notification.notification_id)
+        if (current) Object.assign(current, patch)
+      }, ms),
+    )
+  advance({ status: 'sending', attempt_count: 1 }, 3000)
+  advance({ status: 'accepted' }, 7000)
+  advance({ status: 'delivered' }, 15000)
+}
+
+// Controls for development and for recording the demo.
 export const mockControls = {
   setOffline: (value: boolean) => {
     offline = value
@@ -181,11 +208,27 @@ export const mockControls = {
   },
   pauseDemo: pausePlayback,
   resetDemo: stopPlayback,
+  // Simulates a second operator approving first, to see the 409 message:
+  // run mockControls.reviewAsAnotherOperator('alert_demo_01') in the console, then click Approve
+  // before the next poll (5 s).
+  reviewAsAnotherOperator: (id: string) => {
+    const alert = findAlert(id)
+    if (!alert || alert.status !== 'pending_review') return false
+    alert.version += 1
+    alert.status = 'queued'
+    alert.approved_by = 'operator.other'
+    alert.approved_at = new Date(mockControls.getNow()).toISOString()
+    alert.review_reason = 'Preventive alert reviewed'
+    queueCall(alert)
+    return true
+  },
 }
+
+if (import.meta.env.DEV) Object.assign(window, { mockControls })
 
 async function respond<T>(fn: () => T, ms = 250): Promise<T> {
   if (!demoActive) await new Promise((r) => setTimeout(r, ms))
-  if (offline) throw new ApiError(0, 'NETWORK_ERROR', 'No se pudo conectar con el servidor.', true)
+  if (offline) throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server.', true)
   return structuredClone(fn())
 }
 
@@ -203,39 +246,36 @@ export const mockAdapter: DashboardApi = {
   getAlerts: (status) =>
     respond(() => page(status ? state.alerts.filter((a) => a.status === status) : state.alerts)),
 
+  getAlert: (id) =>
+    respond(() => {
+      const alert = findAlert(id)
+      if (!alert) throw new ApiError(404, 'NOT_FOUND', 'Alert not found.')
+      return alert
+    }),
+
+  // Same rules and error codes as backend/app/alerts.py review_alert.
   reviewAlert: (id, body) =>
     respond(() => {
-      const alert = state.alerts.find((a) => a.id === id)
-      if (!alert) throw new ApiError(404, 'NOT_FOUND', 'La alerta no existe.')
+      const alert = findAlert(id)
+      if (!alert) throw new ApiError(404, 'NOT_FOUND', 'Alert not found.')
       if (alert.status !== 'pending_review') {
-        throw new ApiError(409, 'ALERT_NOT_PENDING', 'Esta alerta ya fue revisada por otra persona.')
+        throw new ApiError(409, 'ALERT_ALREADY_REVIEWED', `The alert is already ${alert.status}.`)
       }
       if (alert.version !== body.expected_version) {
-        throw new ApiError(409, 'VERSION_CONFLICT', 'La alerta cambió desde que la abriste. Revisa la versión actual.')
+        throw new ApiError(409, 'VERSION_CONFLICT', 'The alert changed; reload and try again.')
       }
       alert.version += 1
       alert.review_reason = body.reason || null
-      alert.approved_by = 'operador.demo'
+      alert.approved_by = 'operator.demo'
       alert.approved_at = new Date(mockControls.getNow()).toISOString()
       if (body.decision === 'reject') {
         alert.status = 'rejected'
         return alert
       }
+      // approved -> queued, with the call queued in the same step (section 10.7).
       alert.message = body.message
       alert.status = 'queued'
-      alert.delivery_status = 'queued'
-      if (!demoActive) {
-        const advance = (to: 'sending' | 'accepted' | 'delivered', ms: number) => {
-          const handle = setTimeout(() => {
-            const current = state.alerts.find((a) => a.id === id)
-            if (current) current.delivery_status = to
-          }, ms)
-          deliveryTimers.push(handle)
-        }
-        advance('sending', 3000)
-        advance('accepted', 6000)
-        advance('delivered', 11000)
-      }
+      queueCall(alert)
       return alert
     }, 500),
 

@@ -63,8 +63,8 @@ function ago(from: number, min: number): string {
   return iso(from - min * 60_000)
 }
 
-const SMS =
-  'Se reportaron síntomas en la zona. Revisa tu parcela y responde si observas cambios. Este aviso no confirma afectación.'
+const ALERT_MESSAGE =
+  'Coffee leaf rust symptoms were reported nearby. Check your plot and tell us if you see changes. This alert does not confirm your plot is affected.'
 
 function node(state: DemoState, id: string): GraphNode {
   const found = state.graph.nodes.find((n) => n.id === id)
@@ -229,6 +229,11 @@ export function buildSimStart(): DemoState {
   }
 }
 
+/** The voice call queued when the operator approved alert_sim_02. */
+function alertCall(state: DemoState) {
+  return findAlert(state, 'alert_sim_02').notifications[0]!
+}
+
 function findAlert(state: DemoState, id: string): Alert {
   const found = state.alerts.find((a) => a.id === id)
   if (!found) throw new Error(`Alerta no encontrada: ${id}`)
@@ -253,7 +258,7 @@ export const DEMO_EVENTS: DemoEvent[] = [
     atMs: 8_000,
     simNow: t(1, 9, 18),
     caption: 'Llamada: manchas en varias plantas de la parcela 1',
-    route: '/parcela/plot_demo_01',
+    route: '/plot/plot_demo_01',
     apply: (state) => {
       patchNode(state, 'plot_demo_01', {
         local_case_status: 'reported',
@@ -399,7 +404,7 @@ export const DEMO_EVENTS: DemoEvent[] = [
     atMs: 26_000,
     simNow: t(1, 9, 31),
     caption: 'Alerta preventiva lista para revisión',
-    route: '/alertas',
+    route: '/alerts',
     apply: (state) => {
       state.alerts.unshift({
         id: 'alert_sim_02',
@@ -409,11 +414,10 @@ export const DEMO_EVENTS: DemoEvent[] = [
         risk_evaluation_id: 'risk_sim_02',
         inspection_priority: 'medium',
         status: 'pending_review',
-        message: SMS,
+        message: ALERT_MESSAGE,
         reasons: ['Vecina de un caso activo a 6 km', 'Humedad por encima de lo normal'],
-        recipients_count: 1,
-        delivery_status: null,
-        last_error: null,
+        recipient_label: 'Demo farmer 2',
+        notifications: [],
         version: 1,
         created_at: iso(t(1, 9, 31)),
         approved_by: null,
@@ -433,11 +437,13 @@ export const DEMO_EVENTS: DemoEvent[] = [
   {
     atMs: 32_000,
     simNow: t(1, 9, 33),
-    caption: 'El operador aprueba; el SMS entra en cola',
+    caption: 'The operator approves; the alert call is queued',
     apply: (state) => {
       const alert = findAlert(state, 'alert_sim_02')
       alert.status = 'queued'
-      alert.delivery_status = 'queued'
+      alert.notifications = [
+        { notification_id: 'notification_sim_02', channel: 'voice', status: 'queued', attempt_count: 0, last_error: null },
+      ]
       alert.version = 2
       alert.approved_by = 'operador.demo'
       alert.approved_at = iso(t(1, 9, 33))
@@ -447,32 +453,32 @@ export const DEMO_EVENTS: DemoEvent[] = [
   {
     atMs: 34_000,
     simNow: t(1, 9, 35),
-    caption: 'SMS en envío hacia la parcela 2',
+    caption: 'Calling the farmer of plot 2',
     apply: (state) => {
-      findAlert(state, 'alert_sim_02').delivery_status = 'sending'
+      Object.assign(alertCall(state), { status: 'sending', attempt_count: 1 })
     },
   },
   {
     atMs: 37_000,
     simNow: t(1, 9, 37),
-    caption: 'El proveedor aceptó el mensaje',
+    caption: 'The call is in progress',
     apply: (state) => {
-      findAlert(state, 'alert_sim_02').delivery_status = 'accepted'
+      alertCall(state).status = 'accepted'
     },
   },
   {
     atMs: 40_000,
     simNow: t(1, 9, 40),
-    caption: 'SMS entregado (no implica que lo hayan leído)',
+    caption: 'The farmer confirmed they heard the alert',
     apply: (state) => {
-      findAlert(state, 'alert_sim_02').delivery_status = 'delivered'
+      alertCall(state).status = 'delivered'
     },
   },
   {
     atMs: 42_000,
     simNow: t(4, 10, 0),
     caption: 'Tres días después: toca la llamada de seguimiento',
-    route: '/seguimientos',
+    route: '/followups',
     jump: true,
     apply: (state) => {
       addTimeline(state, 'plot_demo_01', {
@@ -498,7 +504,7 @@ export const DEMO_EVENTS: DemoEvent[] = [
     atMs: 54_000,
     simNow: t(4, 10, 8),
     caption: 'Se resolvió: deja de ser caso fuente y los vecinos bajan',
-    route: '/casos-resueltos',
+    route: '/resolved',
     apply: (state) => {
       const followup = findFollowup(state, 'followup_sim_01')
       followup.status = 'responded'

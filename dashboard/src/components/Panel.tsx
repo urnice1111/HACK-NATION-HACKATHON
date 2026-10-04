@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router'
 
 type Props = { title: string; subtitle?: string; children: ReactNode; wide?: boolean; icon?: ReactNode }
 
-// Panel flotante a la derecha del mapa, compartido por todas las pantallas.
+// Floating panel to the right of the map, shared by every screen.
 export function Panel({ title, subtitle, children, wide = false, icon }: Props) {
   const navigate = useNavigate()
   return (
@@ -26,8 +26,8 @@ export function Panel({ title, subtitle, children, wide = false, icon }: Props) 
         </div>
         <button
           onClick={() => navigate('/')}
-          aria-label="Cerrar"
-          title="Cerrar"
+          aria-label="Close"
+          title="Close"
           className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-panel-2 hover:text-ink"
         >
           <X size={18} />

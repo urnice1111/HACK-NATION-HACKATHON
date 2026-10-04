@@ -1,5 +1,5 @@
-// Tipos copiados del contrato GET /v1/graph (INSTRUCTIONS.md, sección 10.6).
-// No cambiar nombres sin acuerdo con el integrante 3.
+// Types copied from the GET /v1/graph contract (INSTRUCTIONS.md, section 10.6).
+// Don't rename fields without agreeing with Integrante 3.
 
 export type InspectionPriority = 'unknown' | 'low' | 'medium' | 'high'
 export type LocalCaseStatus = 'none' | 'reported' | 'suspected' | 'confirmed' | 'monitoring' | 'resolved'
@@ -50,10 +50,8 @@ export interface GraphResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Contratos del dashboard. Las rutas están en INSTRUCTIONS.md (sección 10), pero
-// el JSON exacto de alertas, seguimientos, timeline y casos resueltos no está
-// definido. Estos tipos son una PROPUESTA basada en los modelos de la sección 9:
-// acordarlos con el integrante 3 antes de conectar.
+// Dashboard view models. httpAdapter translates the backend shapes
+// (contracts/models.py) into these, so screens don't change with the API.
 // ---------------------------------------------------------------------------
 
 export interface Page<T> {
@@ -64,28 +62,38 @@ export interface Page<T> {
 export type AlertStatus = 'pending_review' | 'approved' | 'rejected' | 'cancelled' | 'queued'
 export type NotificationStatus = 'queued' | 'sending' | 'accepted' | 'delivered' | 'failed' | 'unknown' | 'cancelled'
 
+// One delivery attempt chain for an approved alert (contracts/models.py AlertNotification).
+// Alerts are delivered by a voice call from the ElevenLabs "Alerts" agent.
+export interface AlertNotification {
+  notification_id: string
+  channel: 'voice' | 'sms'
+  status: NotificationStatus
+  attempt_count: number
+  // Reason code first, e.g. "NO_ANSWER" or "NO_ANSWER: free text".
+  last_error: string | null
+}
+
 export interface Alert {
   id: string
   plot_id: string
   plot_label: string
+  recipient_label: string
   threat_code: string
   risk_evaluation_id: string
   inspection_priority: InspectionPriority
   status: AlertStatus
   message: string
   reasons: string[]
-  recipients_count: number
-  delivery_status: NotificationStatus | null
-  last_error: string | null
   version: number
   created_at: string
   approved_by: string | null
   approved_at: string | null
   review_reason: string | null
+  notifications: AlertNotification[]
   is_demo: boolean
 }
 
-// Cuerpo de POST /v1/alerts/{id}/review (sección 10.7).
+// Body of POST /v1/alerts/{id}/review (section 10.7).
 export interface AlertReview {
   decision: 'approve' | 'reject'
   expected_version: number
@@ -163,7 +171,7 @@ export interface ResolvedCase {
   is_demo: boolean
 }
 
-// Error uniforme (sección 8).
+// Uniform error body (section 8).
 export interface ApiErrorBody {
   error: {
     code: string
