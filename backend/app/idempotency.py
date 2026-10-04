@@ -47,7 +47,7 @@ def idempotent(conn: Connection, key: str, scope: str, body: BaseModel,
         status, payload = run()
         conn.execute(
             "update idempotency_keys set response_status = %s, response_body = %s where key = %s",
-            (status, Jsonb(payload), key),
+            (status, Jsonb(payload), key), 
         )
     return JSONResponse(payload, status_code=status)
 
