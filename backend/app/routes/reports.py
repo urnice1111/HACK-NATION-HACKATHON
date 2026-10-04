@@ -1,14 +1,18 @@
+import logging
+
 from fastapi import APIRouter, Depends, Header
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
 from backend.app.db import get_conn
 from backend.app.errors import ApiError
+from backend.app.graph.engine import recalculate
 from backend.app.idempotency import body_hash, claim_key, store_response
 from contracts.enums import DEMO_THREAT_CODE, EventType
 from contracts.models import ReportCreate, ReportCreated
 
 router = APIRouter(prefix="/v1/reports", tags=["reports"])
+log = logging.getLogger("api.reports")
 
 
 def open_case_for(conn: Connection, plot_id: str, threat_code: str, is_demo: bool) -> str:
@@ -98,4 +102,10 @@ def create_report(
         ).model_dump(mode="json")
         store_response(conn, idempotency_key, 201, result)
 
+    # Until the worker exists, recalculate inline. A failure leaves the report saved as `pending`.
+    try:
+        recalculate(conn, threat_code)
+        conn.execute("update reports set processing_status = 'processed' where id = %s", (result["report_id"],))
+    except Exception:
+        log.exception("recalculation failed after report %s", result["report_id"])
     return result

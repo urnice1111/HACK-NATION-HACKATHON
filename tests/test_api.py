@@ -74,7 +74,13 @@ def test_plot_context(client):
     assert resp.status_code == 200
     assert [c["case_id"] for c in body["active_cases"]] == ["case_demo_01"]
     assert body["risk"][0]["inspection_priority"] == "high"
-    assert body["environment_summary"]["data_freshness"] == "unknown"
+    assert body["environment_summary"]["data_freshness"] == "fresh"
+    assert body["environment_summary"]["features"]["humidity_mean_14d"] == 88
+
+
+def test_plot_without_env_summary_is_unknown_not_error(client):
+    body = client.get("/v1/plots/plot_demo_07/context").json()
+    assert body["environment_summary"] == {"computed_at": None, "features": {}, "data_freshness": "unknown"}
 
 
 def test_plot_context_uses_latest_risk_evaluation(client):

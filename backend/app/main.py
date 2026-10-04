@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
-from backend.app.routes import contacts, plots, reports
+from backend.app.routes import contacts, graph, plots, reports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -45,3 +45,4 @@ def health():
 app.include_router(contacts.router)
 app.include_router(plots.router)
 app.include_router(reports.router)
+app.include_router(graph.router)
