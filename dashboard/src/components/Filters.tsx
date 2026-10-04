@@ -12,13 +12,13 @@ type Props = {
 export function Filters({ active, counts, onToggle }: Props) {
   const total = ORDER.reduce((s, p) => s + counts[p], 0)
   return (
-    <section aria-label="Filtrar por prioridad" className="glass animate-fade-in px-4 py-3">
+    <section aria-label="Filter by priority" className="glass animate-fade-in px-4 py-3">
       <div className="mb-2.5 flex items-baseline justify-between">
-        <h2 className="section-title">Mostrar prioridad</h2>
-        <span className="text-xs text-ink-muted">{total} parcelas</span>
+        <h2 className="section-title">Show priority</h2>
+        <span className="text-xs text-ink-muted">{total} plots</span>
       </div>
 
-      {/* Barra de distribución: proporción de parcelas por prioridad. */}
+      {/* Distribution bar: share of plots per priority. */}
       {total > 0 && (
         <div className="mb-3 flex h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
           {ORDER.map((p) => (

@@ -14,7 +14,7 @@ const ALL: InspectionPriority[] = ['high', 'medium', 'low', 'unknown']
 export function AppLayout() {
   const graph = useGraph()
   const navigate = useNavigate()
-  const plotMatch = useMatch('/parcela/:plotId')
+  const plotMatch = useMatch('/plot/:plotId')
   const [active, setActive] = useState(() => new Set<InspectionPriority>(ALL))
 
   const counts = useMemo(() => {
@@ -44,11 +44,11 @@ export function AppLayout() {
         <MapView
           graph={visible}
           selectedId={plotMatch?.params.plotId ?? null}
-          onSelect={(id) => navigate(id ? `/parcela/${id}` : '/')}
+          onSelect={(id) => navigate(id ? `/plot/${id}` : '/')}
         />
       )}
 
-      {/* Viñeta sutil para que los paneles resalten sobre el mapa. */}
+      {/* Subtle vignette so the panels stand out over the map. */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(11_14_19/0.55))]" />
 
       {!graph.data && (
@@ -56,26 +56,26 @@ export function AppLayout() {
           {graph.isPending ? (
             <div className="flex flex-col items-center gap-3">
               <Loader2 size={28} className="animate-spin text-accent" />
-              Cargando parcelas…
+              Loading plots…
             </div>
           ) : (
             <div role="alert" className="glass flex flex-col items-center gap-2 px-8 py-6 text-center">
               <TriangleAlert size={24} className="text-prio-high" />
-              <p className="font-medium text-prio-high">No se pudo cargar el grafo de parcelas.</p>
+              <p className="font-medium text-prio-high">Could not load the plot graph.</p>
               <button onClick={() => void graph.refetch()} className="btn-ghost mt-2">
-                <RefreshCw size={14} />Reintentar
+                <RefreshCw size={14} />Retry
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Avisos debajo del menú: en el centro quedaban tapados por el panel derecho en pantallas angostas. */}
+      {/* Notices under the menu: centered, the right panel covered them on narrow screens. */}
       <div className="absolute top-4 left-4 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col items-start gap-2">
         <NavBar />
         {graph.data?.nodes.some((n) => n.is_demo) && (
           <div role="status" className="flex animate-fade-in items-center gap-2 rounded-full border border-accent/30 bg-panel/85 px-4 py-1.5 text-xs font-medium text-accent shadow-float backdrop-blur-md">
-            <FlaskConical size={14} />Modo demo: datos simulados
+            <FlaskConical size={14} />Demo mode: simulated data
           </div>
         )}
         <ConnectionBanner query={graph} />

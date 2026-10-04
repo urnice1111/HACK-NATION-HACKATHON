@@ -1,8 +1,8 @@
 const TZ = 'America/Mexico_City'
 
-const timeFmt = new Intl.DateTimeFormat('es-MX', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
-const dateFmt = new Intl.DateTimeFormat('es-MX', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const rtf = new Intl.RelativeTimeFormat('es-MX', { numeric: 'auto' })
+const timeFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
+const dateFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const rtf = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' })
 
 export const formatTime = (iso: string | number) => timeFmt.format(new Date(iso))
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso))

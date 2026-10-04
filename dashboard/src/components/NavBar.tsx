@@ -27,7 +27,7 @@ export function NavBar() {
     }`
 
   const onReset = () => {
-    if (window.confirm('¿Reiniciar la demo? Se restauran todos los datos simulados.')) reset.mutate()
+    if (window.confirm('Reset the demo? All simulated data is restored.')) reset.mutate()
   }
 
   return (
@@ -37,20 +37,20 @@ export function NavBar() {
           <Sprout size={22} strokeWidth={2.25} />
         </span>
         <div className="min-w-0">
-          <h1 className="text-base leading-tight font-semibold">Red de parcelas de café</h1>
-          <p className="text-xs text-ink-muted">Roya del café · centro de Veracruz</p>
+          <h1 className="text-base leading-tight font-semibold">Coffee plot network</h1>
+          <p className="text-xs text-ink-muted">Coffee leaf rust · central Veracruz</p>
         </div>
       </div>
 
-      <nav aria-label="Secciones" className="mx-3 mb-3 grid grid-cols-4 gap-1 rounded-xl border border-line/80 bg-bg/40 p-1">
-        <NavLink to="/" end className={link}><Map size={17} />Mapa</NavLink>
-        <NavLink to="/alertas" className={link}>
-          <span className="relative"><BellRing size={17} /><Count n={pending} tone="medium" /></span>Alertas
+      <nav aria-label="Sections" className="mx-3 mb-3 grid grid-cols-4 gap-1 rounded-xl border border-line/80 bg-bg/40 p-1">
+        <NavLink to="/" end className={link}><Map size={17} />Map</NavLink>
+        <NavLink to="/alerts" className={link}>
+          <span className="relative"><BellRing size={17} /><Count n={pending} tone="medium" /></span>Alerts
         </NavLink>
-        <NavLink to="/seguimientos" className={link}>
-          <span className="relative"><PhoneCall size={17} /><Count n={overdue} tone="high" /></span>Seguimiento
+        <NavLink to="/followups" className={link}>
+          <span className="relative"><PhoneCall size={17} /><Count n={overdue} tone="high" /></span>Follow-ups
         </NavLink>
-        <NavLink to="/casos-resueltos" className={link}><CheckCircle2 size={17} />Resueltos</NavLink>
+        <NavLink to="/resolved" className={link}><CheckCircle2 size={17} />Resolved</NavLink>
       </nav>
 
       {API_MODE === 'mock' && (
@@ -59,13 +59,13 @@ export function NavBar() {
           disabled={reset.isPending}
           className="flex w-full items-center gap-2 border-t border-line/80 px-4 py-2.5 text-xs text-prio-medium transition-colors hover:bg-prio-medium/10 disabled:opacity-50"
         >
-          <RotateCcw size={14} className={reset.isPending ? 'animate-spin' : ''} />Reiniciar demo
+          <RotateCcw size={14} className={reset.isPending ? 'animate-spin' : ''} />Reset demo
         </button>
       )}
 
       {API_MODE === 'mock' && (
         <label className="flex cursor-pointer items-center justify-between gap-2 border-t border-line/80 px-4 py-2.5 text-xs text-ink-muted">
-          <span className="flex items-center gap-2"><WifiOff size={14} />Simular desconexión</span>
+          <span className="flex items-center gap-2"><WifiOff size={14} />Simulate disconnection</span>
           <input
             type="checkbox"
             role="switch"
