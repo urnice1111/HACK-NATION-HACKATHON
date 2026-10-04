@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "AlertNotification": {
+      "properties": {
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "attempt_count": {
+          "title": "Attempt Count",
+          "type": "integer"
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Error"
+        }
+      },
+      "required": [
+        "notification_id",
+        "channel",
+        "status",
+        "attempt_count",
+        "last_error"
+      ],
+      "title": "AlertNotification",
+      "type": "object"
+    },
+    "AlertOut": {
+      "description": "Alert for the operator queue. Recipient is a label only; no phone numbers.",
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        },
+        "plot_id": {
+          "title": "Plot Id",
+          "type": "string"
+        },
+        "plot_label": {
+          "title": "Plot Label",
+          "type": "string"
+        },
+        "recipient_label": {
+          "title": "Recipient Label",
+          "type": "string"
+        },
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Message"
+        },
+        "inspection_priority": {
+          "$ref": "#/$defs/InspectionPriority"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "risk_evaluation_id": {
+          "title": "Risk Evaluation Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "review_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Review Reason"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved By"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved At"
+        },
+        "notifications": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AlertNotification"
+          },
+          "title": "Notifications",
+          "type": "array"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "alert_id",
+        "plot_id",
+        "plot_label",
+        "recipient_label",
+        "threat_code",
+        "status",
+        "version",
+        "message",
+        "inspection_priority",
+        "score",
+        "risk_evaluation_id",
+        "created_at",
+        "review_reason",
+        "approved_by",
+        "approved_at",
+        "is_demo"
+      ],
+      "title": "AlertOut",
+      "type": "object"
+    },
+    "InspectionPriority": {
+      "enum": [
+        "unknown",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "InspectionPriority",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "alerts": {
+      "items": {
+        "$ref": "#/$defs/AlertOut"
+      },
+      "title": "Alerts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "alerts"
+  ],
+  "title": "AlertList",
+  "type": "object"
+}

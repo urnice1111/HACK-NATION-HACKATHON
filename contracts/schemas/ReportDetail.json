@@ -17,8 +17,25 @@
       "title": "Completeness",
       "type": "string"
     },
-    "Measurement": {
-      "additionalProperties": false,
+    "MeasurementSource": {
+      "enum": [
+        "farmer_reported",
+        "sensor",
+        "technician"
+      ],
+      "title": "MeasurementSource",
+      "type": "string"
+    },
+    "ProcessingStatus": {
+      "enum": [
+        "pending",
+        "processed",
+        "failed"
+      ],
+      "title": "ProcessingStatus",
+      "type": "string"
+    },
+    "ReportMeasurement": {
       "properties": {
         "name": {
           "title": "Name",
@@ -39,7 +56,6 @@
           "title": "Value"
         },
         "unit": {
-          "minLength": 1,
           "title": "Unit",
           "type": "string"
         },
@@ -57,7 +73,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Measured At"
         },
         "method": {
@@ -69,44 +84,40 @@
               "type": "null"
             }
           ],
-          "default": null,
           "title": "Method"
         },
         "source": {
-          "$ref": "#/$defs/MeasurementSource",
-          "default": "farmer_reported"
+          "$ref": "#/$defs/MeasurementSource"
         }
       },
       "required": [
         "name",
         "value",
         "unit",
-        "sample_type"
+        "sample_type",
+        "measured_at",
+        "method",
+        "source"
       ],
-      "title": "Measurement",
+      "title": "ReportMeasurement",
       "type": "object"
-    },
-    "MeasurementSource": {
-      "enum": [
-        "farmer_reported",
-        "sensor",
-        "technician"
-      ],
-      "title": "MeasurementSource",
-      "type": "string"
     }
   },
-  "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": "2.0",
-      "default": "2.0",
-      "title": "Schema Version",
+    "report_id": {
+      "title": "Report Id",
       "type": "string"
     },
-    "session_id": {
-      "title": "Session Id",
-      "type": "string"
+    "case_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Case Id"
     },
     "plot_id": {
       "anyOf": [
@@ -119,17 +130,9 @@
       ],
       "title": "Plot Id"
     },
-    "case_id": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Case Id"
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
     },
     "channel": {
       "$ref": "#/$defs/Channel"
@@ -143,7 +146,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "title": "Provider Reference"
     },
     "observed_at": {
@@ -156,11 +158,14 @@
           "type": "null"
         }
       ],
-      "default": null,
       "title": "Observed At"
     },
+    "received_at": {
+      "format": "date-time",
+      "title": "Received At",
+      "type": "string"
+    },
     "symptoms": {
-      "default": [],
       "items": {
         "type": "string"
       },
@@ -168,24 +173,15 @@
       "type": "array"
     },
     "measurements": {
-      "default": [],
       "items": {
-        "$ref": "#/$defs/Measurement"
+        "$ref": "#/$defs/ReportMeasurement"
       },
       "title": "Measurements",
       "type": "array"
     },
     "user_statement": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "User Statement"
+      "title": "User Statement",
+      "type": "string"
     },
     "completeness": {
       "$ref": "#/$defs/Completeness"
@@ -199,8 +195,15 @@
           "type": "null"
         }
       ],
-      "default": null,
       "title": "Assessment Id"
+    },
+    "processing_status": {
+      "$ref": "#/$defs/ProcessingStatus"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
     },
     "is_demo": {
       "title": "Is Demo",
@@ -208,12 +211,23 @@
     }
   },
   "required": [
-    "session_id",
+    "report_id",
+    "case_id",
     "plot_id",
+    "session_id",
     "channel",
+    "provider_reference",
+    "observed_at",
+    "received_at",
+    "symptoms",
+    "measurements",
+    "user_statement",
     "completeness",
+    "assessment_id",
+    "processing_status",
+    "created_at",
     "is_demo"
   ],
-  "title": "ReportCreate",
+  "title": "ReportDetail",
   "type": "object"
 }

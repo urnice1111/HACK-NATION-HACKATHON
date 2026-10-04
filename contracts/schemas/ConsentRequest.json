@@ -1,0 +1,88 @@
+{
+  "additionalProperties": false,
+  "description": "Each permission null = not asked in this session (previous value kept).",
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "farmer_id": {
+      "title": "Farmer Id",
+      "type": "string"
+    },
+    "channel": {
+      "enum": [
+        "voice",
+        "sms"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "reports": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reports"
+    },
+    "notifications": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notifications"
+    },
+    "followup_calls": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Followup Calls"
+    },
+    "provider_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Reference"
+    },
+    "is_demo": {
+      "default": true,
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "farmer_id",
+    "channel"
+  ],
+  "title": "ConsentRequest",
+  "type": "object"
+}

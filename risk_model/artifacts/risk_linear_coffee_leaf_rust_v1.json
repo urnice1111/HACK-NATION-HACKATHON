@@ -1,0 +1,112 @@
+{
+  "model_id": "risk_linear",
+  "model_version": "1.0.0",
+  "threat_code": "coffee_leaf_rust",
+  "target": "rust_pressure_index: presión esperada de roya en 30 días",
+  "trained_at": "2026-10-04T04:31:54.337530Z",
+  "features": [
+    {
+      "name": "rain_anomaly_30d",
+      "mean": 1.294,
+      "std": 0.3127363106516415,
+      "coef": 0.018938615932221056,
+      "required": true
+    },
+    {
+      "name": "temp_max_mean_14d",
+      "mean": 23.419999999999998,
+      "std": 1.397712416772492,
+      "coef": -0.01107174907113664,
+      "required": false
+    },
+    {
+      "name": "humidity_mean_14d",
+      "mean": 76.5,
+      "std": 7.6452599694189605,
+      "coef": 0.008866438272002342,
+      "required": true
+    },
+    {
+      "name": "extreme_heat_days_14d",
+      "mean": 0.9,
+      "std": 1.374772708486752,
+      "coef": -0.0031694579102097883,
+      "required": false
+    },
+    {
+      "name": "direct_active_reports",
+      "mean": 1.2,
+      "std": 0.7483314773547883,
+      "coef": 0.003232837128309793,
+      "required": true
+    },
+    {
+      "name": "neighbor_source_exposure",
+      "mean": 0.45,
+      "std": 0.30413812651491096,
+      "coef": 0.19186900879577357,
+      "required": true
+    },
+    {
+      "name": "nearest_source_distance_km",
+      "mean": 9.2,
+      "std": 5.706137047074842,
+      "coef": -0.06253809372238708,
+      "required": false
+    },
+    {
+      "name": "resolved_cases_last_90d",
+      "mean": 0.2,
+      "std": 0.4,
+      "coef": 0.004513479067173279,
+      "required": false
+    }
+  ],
+  "intercept": 0.5460000000000002,
+  "score_range": [
+    0,
+    1
+  ],
+  "cutoffs": {
+    "medium": 0.4,
+    "high": 0.7
+  },
+  "metrics": {
+    "mae": 0.06185384172374629,
+    "r2": 0.21865624471951328,
+    "n_train": 10,
+    "n_test": 2
+  },
+  "labels_are_synthetic": true,
+  "heuristic": false,
+  "test_vectors": [
+    {
+      "input": {
+        "rain_anomaly_30d": 0.91,
+        "temp_max_mean_14d": 23.5,
+        "humidity_mean_14d": 68.0,
+        "extreme_heat_days_14d": 1.0,
+        "direct_active_reports": 0.0,
+        "neighbor_source_exposure": 0.1,
+        "nearest_source_distance_km": 15.0,
+        "resolved_cases_last_90d": 0.0
+      },
+      "expected_score": 0.22021474,
+      "expected_priority": "low"
+    },
+    {
+      "input": {
+        "rain_anomaly_30d": 1.12,
+        "temp_max_mean_14d": 24.5,
+        "humidity_mean_14d": 70.0,
+        "extreme_heat_days_14d": 2.0,
+        "direct_active_reports": 0.0,
+        "neighbor_source_exposure": 0.25,
+        "nearest_source_distance_km": 11.0,
+        "resolved_cases_last_90d": 0.0
+      },
+      "expected_score": 0.36349295,
+      "expected_priority": "low"
+    }
+  ]
+}

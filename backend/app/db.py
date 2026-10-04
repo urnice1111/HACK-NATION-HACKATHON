@@ -11,7 +11,8 @@ pool = ConnectionPool(
     min_size=1,
     max_size=10,
     open=False,
-    kwargs={"row_factory": dict_row, "options": "-c statement_timeout=5000"},
+    # autocommit: plain reads don't leave transactions open; writes use conn.transaction().
+    kwargs={"row_factory": dict_row, "autocommit": True, "options": "-c statement_timeout=5000"},
 )
 
 
