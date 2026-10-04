@@ -30,7 +30,10 @@ import {
 
 export interface BackendClientOptions {
   baseUrl: string;
-  serviceToken: string;
+  /** El asesor (Integrante 2) es otro servicio; por defecto, `baseUrl` (el mock sirve ambos). */
+  advisorBaseUrl?: string | null;
+  /** Sin token no se envía `Authorization` (el backend real aún no autentica servicios). */
+  serviceToken?: string | null;
   timeoutMs?: number;
   fetch?: typeof fetch;
 }
@@ -62,11 +65,13 @@ export function reportIdempotencyKey(sessionId: string, turn: number): string {
 
 export class BackendClient {
   private readonly baseUrl: string;
+  private readonly advisorBaseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: BackendClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = origin(options.baseUrl);
+    this.advisorBaseUrl = origin(options.advisorBaseUrl || options.baseUrl);
     this.timeoutMs = options.timeoutMs ?? 8000;
     this.fetchImpl = options.fetch ?? fetch;
   }
@@ -84,7 +89,11 @@ export class BackendClient {
   }
 
   assess(body: AssessmentRequest, opts: CallOptions = {}) {
-    return this.call("POST", "/v1/assessments", AssessmentResponse, { body, opts: withSession(opts, body.session_id) });
+    return this.call("POST", "/v1/assessments", AssessmentResponse, {
+      body,
+      opts: withSession(opts, body.session_id),
+      baseUrl: this.advisorBaseUrl,
+    });
   }
 
   submitReport(body: ReportRequest, idempotencyKey: string, opts: CallOptions = {}) {
@@ -159,22 +168,27 @@ export class BackendClient {
     method: "GET" | "POST",
     path: string,
     schema: T,
-    { body, opts, headers = {} }: { body?: unknown; opts: CallOptions; headers?: Record<string, string> },
+    {
+      body,
+      opts,
+      headers = {},
+      baseUrl = this.baseUrl,
+    }: { body?: unknown; opts: CallOptions; headers?: Record<string, string>; baseUrl?: string },
   ): Promise<BackendResult<z.infer<T>>> {
     const requestId = opts.requestId ?? `req_${randomUUID()}`;
     const requestHeaders: Record<string, string> = {
-      Authorization: `Bearer ${this.options.serviceToken}`,
       Accept: "application/json",
       "X-Request-Id": requestId,
       ...headers,
     };
+    if (this.options.serviceToken) requestHeaders.Authorization = `Bearer ${this.options.serviceToken}`;
     if (body !== undefined) requestHeaders["Content-Type"] = "application/json";
     if (opts.correlationId) requestHeaders["X-Correlation-Id"] = opts.correlationId;
     if (opts.mockScenario) requestHeaders["X-Mock-Scenario"] = opts.mockScenario;
 
     let response: Response;
     try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      response = await this.fetchImpl(`${baseUrl}${path}`, {
         method,
         headers: requestHeaders,
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -202,14 +216,24 @@ export class BackendClient {
 
     if (!response.ok) {
       const parsedError = ErrorBody.safeParse(payload);
-      if (!parsedError.success) return invalid(response.status, echoedRequestId);
+      if (parsedError.success) {
+        return {
+          ok: false,
+          kind: "http",
+          status: response.status,
+          code: parsedError.data.error.code,
+          retryable: parsedError.data.error.retryable,
+          requestId: parsedError.data.error.request_id,
+        };
+      }
+      // Error JSON sin la forma uniforme (p. ej. `{"detail": …}` de FastAPI en el asesor): se respeta el código HTTP.
       return {
         ok: false,
         kind: "http",
         status: response.status,
-        code: parsedError.data.error.code,
-        retryable: parsedError.data.error.retryable,
-        requestId: parsedError.data.error.request_id,
+        code: detailCode(payload) ?? `HTTP_${response.status}`,
+        retryable: response.status === 429 || response.status >= 500,
+        requestId: echoedRequestId,
       };
     }
 
@@ -225,8 +249,20 @@ export class BackendClient {
   }
 }
 
+/** Las rutas ya llevan `/v1`: "http://localhost:8000/v1/" → "http://localhost:8000". */
+function origin(url: string): string {
+  return url.replace(/\/+$/, "").replace(/\/v1$/, "");
+}
+
 function withSession(opts: CallOptions, sessionId: string): CallOptions {
   return { ...opts, correlationId: opts.correlationId ?? sessionId };
+}
+
+/** `{"detail": {"code": "…"}}` → el código; cualquier otra forma → null. */
+function detailCode(payload: unknown): string | null {
+  const detail = (payload as { detail?: unknown } | null)?.detail;
+  const code = (detail as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^[A-Z0-9_]{1,64}$/.test(code) ? code : null;
 }
 
 function invalid(status: number, requestId: string) {

@@ -1,0 +1,9 @@
+{
+  "name": "Ayuda café",
+  "language": "es",
+  "tts": {
+    "model_id": "eleven_flash_v2_5",
+    "voice_id": "cjVigY5qzO86Huf0OWal"
+  },
+  "dynamic_variable_placeholders": {}
+}

@@ -13,7 +13,8 @@
     "mock:backend": "tsx --env-file-if-exists=.env src/mock-backend/main.ts",
     "mock:backend:dev": "tsx watch --env-file-if-exists=.env src/mock-backend/main.ts",
     "typecheck": "tsc",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "agents:sync": "tsx --env-file-if-exists=.env src/elevenlabs/sync-agents.ts"
   },
   "dependencies": {
     "twilio": "^5.13.1",

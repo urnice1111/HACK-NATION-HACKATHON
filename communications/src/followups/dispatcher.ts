@@ -85,6 +85,8 @@ export class FollowupDispatcher {
   private readonly locks = new KeyedMutex();
   private readonly pending = new Map<string, PendingCall>();
   private readonly backoff = new Map<string, { until: number; failures: number }>();
+  /** Último fallo del sondeo: se registra al cambiar, no en cada intervalo (el backend real aún no tiene GET /v1/followups). */
+  private lastPollFailure: string | null = null;
 
   constructor(private readonly deps: DispatcherDeps) {
     this.now = deps.now ?? (() => new Date());
@@ -112,9 +114,12 @@ export class FollowupDispatcher {
     for (const status of ["scheduled", "no_response"] as const) {
       const list = await this.deps.client.listFollowups(status, { dueBefore: this.now().toISOString() });
       if (!list.ok) {
-        log("warn", "followup_poll_failed", { code: list.code });
+        const failure = `${list.status ?? list.kind}:${list.code}`;
+        if (failure !== this.lastPollFailure) log("warn", "followup_poll_failed", { code: list.code, status: list.status });
+        this.lastPollFailure = failure;
         continue;
       }
+      this.lastPollFailure = null;
       for (const item of list.data.followups) results.push(await this.dispatch(item));
     }
     return results;

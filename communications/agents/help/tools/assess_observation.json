@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "assess_observation",
-  "description": "Envía lo que el agricultor ve ahora en sus plantas y sus respuestas; devuelve qué falta preguntar (information_needs) u orientación. Usar solo si la parcela empeoró.",
+  "description": "Envía lo que el agricultor ve en sus plantas y sus respuestas; devuelve qué falta preguntar (information_needs) u orientación.",
   "response_timeout_secs": 15,
   "api_schema": {
     "url": "https://TU-DOMINIO-PUBLICO/v1/tools/assess-observation",
@@ -15,21 +15,16 @@
       "type": "object",
       "required": [
         "session_id",
-        "plot_id",
         "user_statement"
       ],
       "properties": {
         "session_id": {
           "type": "string",
-          "dynamic_variable": "session_id"
-        },
-        "plot_id": {
-          "type": "string",
-          "dynamic_variable": "plot_id"
+          "dynamic_variable": "system__conversation_id"
         },
         "user_statement": {
           "type": "string",
-          "description": "Lo que el agricultor describe ahora, con sus palabras"
+          "description": "Lo que el agricultor describe, con sus palabras"
         },
         "symptoms": {
           "type": "array",

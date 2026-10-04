@@ -1,11 +1,37 @@
 # Agentes de ElevenLabs
 
-| Agente | Carpeta | Estado |
+| Agente | Carpeta | En ElevenLabs |
 | --- | --- | --- |
-| Seguimiento (llamadas salientes) | [`followup/`](followup/) | Listo para configurar |
-| Ayuda (llamadas entrantes) | `help/` | Pendiente (fase 4) |
+| Ayuda (llamadas entrantes) | [`help/`](help/) | "Ayuda café"; contesta el número importado |
+| Seguimiento (llamadas salientes) | [`followup/`](followup/) | "Seguimiento café"; `ELEVENLABS_FOLLOWUP_AGENT_ID` |
 
-Los archivos son la fuente de verdad del prompt y de las herramientas: si cambias algo en el panel de ElevenLabs, cópialo aquí.
+Los archivos son la fuente de verdad: `prompt.md`, `first_message.txt`, `agent.json` (nombre, idioma, voz, variables de prueba) y `tools/*.json`. Para subirlos (crea o actualiza por nombre, sin grabación de audio y con transcripciones de 30 días):
+
+```bash
+npm run agents:sync -- help --assign-number   # ayuda; además el número ELEVENLABS_AGENT_PHONE_NUMBER_ID contesta con él
+npm run agents:sync -- followup               # seguimiento; imprime el ID para ELEVENLABS_FOLLOWUP_AGENT_ID
+```
+
+Necesita `ELEVENLABS_API_KEY`, `PUBLIC_BASE_URL` (las herramientas apuntan ahí) y `ELEVENLABS_TOOL_SECRET` (se guarda en ElevenLabs como el secreto `comms_tool_secret`). Si cambias algo en el panel, cópialo aquí; `test/agent-tools.test.ts` comprueba que las herramientas coinciden con las rutas.
+
+## Agente de ayuda
+
+Flujo de la sección 2.1. La sesión es `system__conversation_id` y el teléfono, `system__caller_id`: el modelo no los escribe. Identidad, parcela y permisos viven en comunicaciones (`src/tools/voice-tools.ts`); el modelo solo ve nombres numerados, nunca tokens ni IDs.
+
+| Herramienta | Ruta | Qué hace |
+| --- | --- | --- |
+| `resolve_farmer` | `/v1/tools/resolve-farmer` | Candidatos por caller ID (`POST /v1/contact-resolution`). Solo nombres: "1 Rosa, 2 Marta". |
+| `confirm_farmer` | `/v1/tools/confirm-farmer` | Confirma al candidato que la persona dijo; devuelve sus parcelas numeradas y qué permisos faltan. Si el token venció (15 min), pide confirmar de nuevo. |
+| `get_plot_context` | `/v1/tools/get-plot-context` | Fija una parcela del agricultor confirmado (`GET /v1/plots/{id}/context`); queda fija para el resto de la llamada. |
+| `record_consent` | `/v1/tools/record-consent` | Tres permisos separados (`POST /v1/consents`). Número no registrado: vale solo para la llamada. |
+| `assess_observation` | `/v1/tools/assess-observation` | Igual que en seguimiento, con la parcela confirmada. |
+| `submit_report` | `/v1/tools/submit-report` | Solo con permiso de guardar; usa la parcela confirmada (o ninguna para un número no registrado). |
+
+Si la llamada se corta sin `submit_report`, tras `VOICE_SESSION_IDLE_MS` (15 min) se guarda lo descrito como `completeness: "partial"`, solo si había permiso.
+
+**Probar:** con `npm run mock:backend`, `npm run dev` y ngrok arriba, llama al número desde tu celular. Con `MOCK_PHONE_OVERRIDES` tu celular es Rosa y Marta en el mock (pregunta con quién habla). En el panel de ElevenLabs no hay caller ID: te trata como número no registrado.
+
+**Número.** La importación nativa apunta la voz del número en Twilio a `https://api.elevenlabs.io/twilio/inbound_call`; asignar otro agente no la reescribe. Si alguien la cambia, hay que re-importar el número en ElevenLabs (cambia su ID: actualiza `ELEVENLABS_AGENT_PHONE_NUMBER_ID`). Ojo: al importarlo, ElevenLabs también pisa el webhook SMS; vuelve a poner `<PUBLIC_BASE_URL>/v1/webhooks/twilio/sms`.
 
 ## Agente de seguimiento
 
@@ -28,6 +54,8 @@ Flujo completo (secciones 2.2 y 17):
 5. Sin `submit_followup` en `FOLLOWUP_CALL_RESULT_TIMEOUT_MS` (10 min): se registra `no_response` y el backend reprograma el reintento (2 min en demo). Tras 3 llamadas sin respuesta, va un SMS ([`src/sms/followup.ts`](../src/sms/followup.ts)). Tras el SMS sin respuesta, no se insiste. Nunca baja el riesgo por silencio.
 
 ### Configuración en ElevenLabs (una vez)
+
+Lo más rápido es `npm run agents:sync -- followup` (pasos 2 a 5). A mano:
 
 1. **Número:** en *Phone Numbers*, importa el número de Twilio (Account SID + Auth Token). Copia su ID a `ELEVENLABS_AGENT_PHONE_NUMBER_ID`. Comprueba que la cuenta Twilio tiene permisos de llamada saliente al país del agricultor (`+52`).
 2. **Agente:** crea un agente nuevo, "Seguimiento café".

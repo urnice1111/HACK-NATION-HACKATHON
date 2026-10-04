@@ -7,7 +7,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { ReportDetail } from "../contracts/index.ts";
 import * as fixtures from "./fixtures.ts";
 
-const CANDIDATE_TOKEN_TTL_MS = 30 * 60 * 1000;
+/** Como el backend real (`candidate_token_ttl_s` = 900). */
+const CANDIDATE_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 interface CandidateGrant {
   session_id: string;
@@ -188,8 +189,19 @@ export class MockState {
       if (scopes.includes("notifications")) contact.notification_consent = false;
       if (scopes.includes("followup_calls")) contact.followup_call_consent = false;
       contact.consent_at = this.nowIso();
+      settleConsent(contact);
       updated += 1;
     }
     return updated;
   }
+}
+
+/**
+ * Como la tabla `contacts` del backend: cada permiso es un booleano (por defecto false) y solo
+ * `consent_at: null` significa "nunca se preguntó". Al guardar cualquier permiso, los no preguntados quedan en false.
+ */
+export function settleConsent(contact: fixtures.FixtureContact): void {
+  contact.report_consent ??= false;
+  contact.notification_consent ??= false;
+  contact.followup_call_consent ??= false;
 }

@@ -1,0 +1,18 @@
+{
+  "name": "Seguimiento café",
+  "language": "es",
+  "tts": {
+    "model_id": "eleven_flash_v2_5",
+    "voice_id": "cjVigY5qzO86Huf0OWal"
+  },
+  "dynamic_variable_placeholders": {
+    "farmer_name": "Marta",
+    "threat_label": "roya del café",
+    "symptoms": "manchas amarillas en hojas",
+    "guidance_given": "Retirar hojas afectadas y vigilar plantas vecinas",
+    "followup_id": "followup_demo_05",
+    "plot_id": "plot_demo_05",
+    "session_id": "voice_fu_prueba",
+    "attempt_number": 1
+  }
+}

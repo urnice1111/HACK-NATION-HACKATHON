@@ -16,6 +16,7 @@ const config = loadConfig();
 // Timeout corto: el webhook de SMS hace como máximo dos llamadas y Twilio corta a los 15 s.
 const client = new BackendClient({
   baseUrl: config.BACKEND_BASE_URL,
+  advisorBaseUrl: config.ADVISOR_BASE_URL,
   serviceToken: config.BACKEND_SERVICE_TOKEN,
   timeoutMs: config.SMS_STEP_TIMEOUT_MS,
 });
@@ -63,6 +64,7 @@ const dispatcher = new FollowupDispatcher({
 // Las herramientas de voz esperan a una evaluación de hasta 5 s más el guardado: timeout más amplio que el del SMS.
 const voiceClient = new BackendClient({
   baseUrl: config.BACKEND_BASE_URL,
+  advisorBaseUrl: config.ADVISOR_BASE_URL,
   serviceToken: config.BACKEND_SERVICE_TOKEN,
   timeoutMs: config.BACKEND_TIMEOUT_MS,
 });
@@ -71,6 +73,7 @@ const voiceTools = new VoiceTools({
   writer: new BackendWriter(voiceClient, config.REPORT_RETRY_DELAYS_MS),
   isDemo: config.IS_DEMO,
   defaultLanguage: config.DEFAULT_LANGUAGE,
+  idleMs: config.VOICE_SESSION_IDLE_MS,
 });
 const conversation = new SmsConversation({
   client,
@@ -103,7 +106,10 @@ if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
   poller.unref();
 }
 
-const sweeper = setInterval(() => void conversation.sweep(), 60_000);
+const sweeper = setInterval(() => {
+  void conversation.sweep();
+  void voiceTools.sweep();
+}, 60_000);
 sweeper.unref();
 
 if (config.DEMO_IGNORE_ALLOWED_HOURS) {
@@ -114,6 +120,8 @@ server.listen(config.COMMS_PORT, "127.0.0.1", () => {
   log("info", "comms_listening", {
     local_url: `http://127.0.0.1:${config.COMMS_PORT}`,
     sms_webhook: `${config.PUBLIC_BASE_URL}/v1/webhooks/twilio/sms`,
+    backend: config.BACKEND_BASE_URL,
+    advisor: config.ADVISOR_BASE_URL ?? config.BACKEND_BASE_URL,
     is_demo: config.IS_DEMO,
     outbound_sms: sender instanceof TwilioSmsSender ? "twilio" : "stub",
     outbound_calls: caller instanceof ElevenLabsOutboundCaller ? "elevenlabs" : "stub",

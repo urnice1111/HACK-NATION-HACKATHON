@@ -20,7 +20,10 @@ const Env = z
     TWILIO_ACCOUNT_SID: Optional,
     TWILIO_PHONE_NUMBER: PhoneE164,
     BACKEND_BASE_URL: Url,
-    BACKEND_SERVICE_TOKEN: z.string().min(1),
+    /** El backend real aún no exige token (el mock sí); sin él no se envía `Authorization`. */
+    BACKEND_SERVICE_TOKEN: Optional,
+    /** El asesor del Integrante 2 es otro servicio (`advisor/`); vacío = BACKEND_BASE_URL (el mock sirve ambos). */
+    ADVISOR_BASE_URL: Url.optional().or(z.literal("")).transform((v) => v || null),
     /** Tope de las herramientas de voz, que esperan una evaluación (≤ 5 s) y el guardado. */
     BACKEND_TIMEOUT_MS: Ms(8000),
     /** Todo lo que produce este servicio va marcado así; demo y producción no se mezclan. */
@@ -30,6 +33,8 @@ const Env = z
     DEFAULT_LANGUAGE: z.string().default("es"),
     /** Tope por llamada al backend dentro del webhook (Twilio corta a los 15 s; hacemos ≤ 2 llamadas). */
     SMS_STEP_TIMEOUT_MS: Ms(4000),
+    /** Inactividad tras la que una llamada de ayuda se da por cortada: lo descrito con permiso se guarda como parcial. */
+    VOICE_SESSION_IDLE_MS: Ms(15 * 60 * 1000),
     /** Inactividad tras la que una conversación SMS se cierra (y se guarda como parcial si procede). */
     SMS_SESSION_IDLE_MS: Ms(30 * 60 * 1000),
     /** Cuánto se espera la respuesta a un seguimiento por SMS antes de registrar `no_response`. */

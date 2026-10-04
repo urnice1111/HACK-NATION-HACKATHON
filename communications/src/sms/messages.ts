@@ -6,10 +6,12 @@ import type { ActionWorked, AssessmentResponse, InformationNeed, ObservationAnsw
  * acentos fuerzan UCS-2 (70 caracteres por segmento).
  */
 export const sms = {
-  identify: (labels: string[]) =>
+  identify: (labels: string[], lead = "Hola.") =>
     labels.length === 1
-      ? `Hola. ¿Escribes tú, ${labels[0]}? Responde 1 para sí o 0 para no.`
-      : `Hola. ¿Quién escribe? ${labels.map((l, i) => `${i + 1} ${l}`).join(", ")}. Responde con el número, o 0 si no eres ninguno.`,
+      ? `${lead} ¿Escribes tú, ${labels[0]}? Responde 1 para sí o 0 para no.`
+      : `${lead} ¿Quién escribe? ${labels.map((l, i) => `${i + 1} ${l}`).join(", ")}. Responde con el número, o 0 si no eres ninguno.`,
+  /** El candidato caducó (15 min): se vuelve a preguntar con candidatos nuevos. */
+  identifyExpired: "Por seguridad, confirma de nuevo.",
   choosePlot: (labels: string[]) => `¿De qué parcela se trata? ${labels.map((l, i) => `${i + 1} ${l}`).join(", ")}. Responde con el número.`,
   unknownNumber: "Hola. Tu número no está registrado en el programa.",
   // Consentimiento (sección 17): tres permisos separados.

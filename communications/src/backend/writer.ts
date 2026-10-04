@@ -54,8 +54,9 @@ export class BackendWriter {
     return this.write("followup_attempt", body.session_id, () => this.client.recordFollowupAttempt(followupId, body));
   }
 
-  recordConsent(body: ConsentRequest): Promise<WriteOutcome<ConsentRecorded>> {
-    return this.write("consent", body.session_id, () => this.client.recordConsent(body));
+  /** Una escritura por sesión (SMS); en voz, una por cada `record_consent` de la llamada. */
+  recordConsent(body: ConsentRequest, key = `consent-${body.session_id}`): Promise<WriteOutcome<ConsentRecorded>> {
+    return this.write("consent", body.session_id, () => this.client.recordConsent(body, key));
   }
 
   /** La baja se deduplica por el MessageSid del SMS que la pidió. */

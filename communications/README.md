@@ -42,6 +42,10 @@ Identidad (el número no basta) → parcela si hay varias → consentimiento →
 
 Limitación: las sesiones viven en memoria. Si el proceso se reinicia, la conversación en curso vuelve a empezar. Persistirlas requiere una tabla del Integrante 3.
 
+## Agente de ayuda (llamadas entrantes)
+
+Quien llama al número de Twilio habla con el agente "Ayuda café" de ElevenLabs: identidad por caller ID y confirmación → parcela → permisos → descripción → preguntas del asesor → orientación → reporte. Las herramientas (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`, `assess_observation`, `submit_report`) guardan identidad, parcela y permisos en comunicaciones, así que el modelo no puede elegir otra parcela ni guardar sin permiso. Detalle y configuración en [`agents/README.md`](agents/README.md).
+
 ## Agente de seguimiento (llamadas salientes)
 
 Flujo, variables dinámicas y configuración en ElevenLabs: [`agents/README.md`](agents/README.md).
@@ -61,7 +65,8 @@ Limitación: las llamadas en curso se recuerdan en memoria. Si el proceso se rei
 | `src/server/` | Servidor HTTP: webhook SMS, herramientas de voz (`/v1/tools/*`) y `followup.due` (`/v1/followups/{id}/dispatch`). `main.ts` arma las dependencias. |
 | `src/sms/` | Conversación SMS (`conversation.ts`), seguimiento por SMS (`followup.ts`), tipos de sesión (`session.ts`) y textos (`messages.ts`). |
 | `src/followups/dispatcher.ts` | Despachador de `followup.due`: permiso, horario y lista blanca; hasta 3 llamadas y luego SMS. |
-| `src/tools/voice-tools.ts` | Server tools de los agentes: `submit_followup`, `assess_observation`, `submit_report`. |
+| `src/tools/voice-tools.ts` | Server tools de los agentes: ayuda (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`) y comunes (`assess_observation`, `submit_report`, `submit_followup`). |
+| `src/elevenlabs/sync-agents.ts` | `npm run agents:sync -- <help\|followup>`: sube a ElevenLabs los agentes de `agents/`. |
 | `src/backend/` | Cliente de `/v1` que valida cada respuesta (`client.ts`) y escrituras con Idempotency-Key fija y reintentos acotados (`writer.ts`). |
 | `src/twilio/`, `src/elevenlabs/` | Firma y TwiML de Twilio, envío de SMS y llamada saliente, ambos con stub. |
 | `src/policy/outreach.ts` | Contacto proactivo: consentimiento, horario local y lista blanca de demo. |
@@ -96,7 +101,7 @@ Casos resueltos: `resolution_demo_01` (`verified`), `resolution_demo_02` (`farme
 
 Las formas marcadas `PROPUESTO` en `src/contracts/resources.ts` no están en la v2:
 
-1. **El backend real ya diverge del mock.** `backend/` y `contracts/` (raíz) separan la confirmación en `POST /v1/contact-resolution/confirm`, devuelven `PlotContext` con `name`, `risk` y `environment_summary.features` como objeto, y aún no tienen `assessments`, `followups` ni `consents`. Hay que alinear `src/contracts/` antes de apuntar `BACKEND_BASE_URL` al backend real.
+1. **Backend real (`backend/`, `contracts/`).** Ya usa nuestras formas de `contact-resolution` (con `confirm_candidate_token`), `consents`, `consents/revocations`, `plots/{id}/context`, `reports` y `reports/{id}`; `test/contracts-compat.test.ts` lo comprueba contra `contracts/schemas/*.json`. Diferencias que comunicaciones ya absorbe: el asesor es otro servicio (`ADVISOR_BASE_URL`, `advisor/`, con errores `{"detail": …}`), no hay token de servicio (`BACKEND_SERVICE_TOKEN` vacío), la URL puede terminar en `/v1`, el `candidate_token` dura 15 min (el SMS vuelve a preguntar si caducó) y un permiso nunca preguntado pasa a `false` al guardar otro. **Falta** `GET /v1/followups`, `POST /v1/followups/{id}/responses` y `…/attempts`: sin ellas el seguimiento solo funciona con el mock (`BACKEND_BASE_URL=http://127.0.0.1:8787`).
 2. **Consentimiento:** dónde se guardan los tres permisos (`POST /v1/consents`) y el de "guardar reportes", que `Contact` no tiene. En un teléfono compartido el permiso es del contacto.
 3. **"BAJA" por SMS:** `POST /v1/consents/revocations` por teléfono.
 4. **Intentos de seguimiento:** `POST /v1/followups/{id}/attempts` (`contacting | no_response | failed`); `contacting` liga la sesión saliente a la parcela del caso.

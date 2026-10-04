@@ -35,6 +35,12 @@ const FollowupDueEvent = OutboxEvent.extend({
 });
 
 const TOOL_ROUTES: Record<string, (tools: VoiceTools, body: unknown) => Promise<ToolReply>> = {
+  // Agente de ayuda (llamada entrante).
+  "/v1/tools/resolve-farmer": (tools, body) => tools.resolveFarmer(body),
+  "/v1/tools/confirm-farmer": (tools, body) => tools.confirmFarmer(body),
+  "/v1/tools/get-plot-context": (tools, body) => tools.getPlotContext(body),
+  "/v1/tools/record-consent": (tools, body) => tools.recordConsent(body),
+  // Ambos agentes.
   "/v1/tools/submit-followup": (tools, body) => tools.submitFollowup(body),
   "/v1/tools/assess-observation": (tools, body) => tools.assessObservation(body),
   "/v1/tools/submit-report": (tools, body) => tools.submitReport(body),

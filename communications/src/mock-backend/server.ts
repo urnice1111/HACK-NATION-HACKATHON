@@ -39,7 +39,7 @@ import { log, maskPhone } from "../http/log.ts";
 import { HttpError, bearerMatches, headerValue, parseBody, readJson, requestIdFrom, safeIdHeader, sendJson } from "../http/respond.ts";
 import { assess } from "./advisor.ts";
 import { FOLLOWUP_CALL_ATTEMPTS, FOLLOWUP_RETRY_MS, type FixtureContact, type FixtureResolution } from "./fixtures.ts";
-import { MockState, fingerprint } from "./state.ts";
+import { MockState, fingerprint, settleConsent } from "./state.ts";
 
 const MAX_DELAY_MS = 30_000;
 
@@ -480,6 +480,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
       if (body.notifications !== null) contact.notification_consent = body.notifications;
       if (body.followup_calls !== null) contact.followup_call_consent = body.followup_calls;
       contact.consent_at = state.nowIso();
+      settleConsent(contact);
 
       const recorded: ConsentRecorded = { farmer_id: body.farmer_id, consent: consentOf(contact), is_demo: true };
       log("info", "consent_recorded", { request_id: ctx.requestId, correlation_id: body.session_id, outcome: "recorded" });

@@ -533,7 +533,7 @@ describe("seguimientos (v2)", () => {
 });
 
 describe("consentimiento (PROPUESTO)", () => {
-  it("guarda los permisos por separado; null conserva el anterior", async () => {
+  it("guarda los permisos por separado; uno nunca preguntado queda en false, como en el backend", async () => {
     const session = newSession();
     const found = await client.resolveContact(resolution(session, "+12025550107"));
     assert.ok(found.ok);
@@ -557,7 +557,7 @@ describe("consentimiento (PROPUESTO)", () => {
     assert.ok(res.ok);
     assert.equal(res.data.consent.reports, true);
     assert.equal(res.data.consent.notifications, false);
-    assert.equal(res.data.consent.followup_calls, null);
+    assert.equal(res.data.consent.followup_calls, false, "consent_at ya no es null: false = no autoriza");
     assert.ok(res.data.consent.consent_at);
   });
 
@@ -611,5 +611,42 @@ describe("cliente", () => {
     const res = await bad.submitReport(report("s", "plot_demo_01"), "k");
     assert.ok(!res.ok);
     assert.equal(res.kind, "invalid_response");
+  });
+
+  it("el asesor va a su propia URL; sin token no se envía Authorization (backend real)", async () => {
+    const seen: { url: string; auth: string | null }[] = [];
+    const spy = (async (input: string | URL | Request, init?: RequestInit) => {
+      seen.push({ url: String(input), auth: new Headers(init?.headers).get("authorization") });
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    }) as typeof fetch;
+    const split = new BackendClient({ baseUrl: "http://backend.test/v1", advisorBaseUrl: "http://advisor.test/", fetch: spy });
+    await split.getReport("report_x");
+    await split.assess({
+      schema_version: SCHEMA_VERSION,
+      session_id: "s",
+      plot_id: "plot_demo_01",
+      language: "es",
+      observation: { observed_at: null, symptoms: [], user_statement: "manchas", measurements: [], answers: [], completeness: "partial" },
+      asked_need_codes: [],
+      plot_context: { crop: "coffee", variety: null },
+      is_demo: true,
+    });
+    assert.deepEqual(seen, [
+      { url: "http://backend.test/v1/reports/report_x", auth: null },
+      { url: "http://advisor.test/v1/assessments", auth: null },
+    ]);
+  });
+
+  it("un error sin la forma uniforme (FastAPI del asesor) es un error HTTP con su código", async () => {
+    const reply = (status: number, body: unknown) =>
+      new BackendClient({ baseUrl, fetch: (async () => new Response(JSON.stringify(body), { status })) as typeof fetch });
+
+    const unavailable = await reply(503, { detail: { code: "ASSESSMENT_UNAVAILABLE", message: "x", retryable: true } }).getReport("r");
+    assert.ok(!unavailable.ok);
+    assert.deepEqual([unavailable.kind, unavailable.code, unavailable.retryable], ["http", "ASSESSMENT_UNAVAILABLE", true]);
+
+    const invalid = await reply(422, { detail: [{ loc: ["body", "x"], msg: "Field required", type: "missing" }] }).getReport("r");
+    assert.ok(!invalid.ok);
+    assert.deepEqual([invalid.kind, invalid.code, invalid.retryable], ["http", "HTTP_422", false]);
   });
 });

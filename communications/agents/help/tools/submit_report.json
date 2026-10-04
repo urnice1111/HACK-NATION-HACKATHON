@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "submit_report",
-  "description": "Guarda la observación que el agricultor confirmó, al terminar la evaluación de una parcela que empeoró.",
+  "description": "Guarda el reporte que el agricultor confirmó, al terminar la evaluación o si no se puede evaluar.",
   "response_timeout_secs": 10,
   "api_schema": {
     "url": "https://TU-DOMINIO-PUBLICO/v1/tools/submit-report",
@@ -21,14 +21,6 @@
       "properties": {
         "session_id": {
           "type": "string",
-          "dynamic_variable": "session_id"
-        },
-        "plot_id": {
-          "type": "string",
-          "dynamic_variable": "plot_id"
-        },
-        "conversation_id": {
-          "type": "string",
           "dynamic_variable": "system__conversation_id"
         },
         "user_statement": {
@@ -41,7 +33,7 @@
             "type": "string",
             "description": "Un síntoma concreto, por ejemplo 'manchas amarillas en hojas'"
           },
-          "description": "Síntomas concretos mencionados"
+          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'"
         },
         "completeness": {
           "type": "string",
@@ -53,7 +45,7 @@
         },
         "assessment_id": {
           "type": "string",
-          "description": "assessment_id de la última respuesta de assess_observation"
+          "description": "assessment_id de la última respuesta de assess_observation, si hubo"
         }
       }
     }

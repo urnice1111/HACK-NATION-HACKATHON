@@ -7,25 +7,59 @@
     "url": "https://TU-DOMINIO-PUBLICO/v1/tools/submit-followup",
     "method": "POST",
     "request_headers": {
-      "Authorization": { "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET" }
+      "Authorization": {
+        "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET"
+      }
     },
     "request_body_schema": {
       "type": "object",
-      "required": ["session_id", "followup_id", "status_reported", "user_statement", "action_worked"],
+      "required": [
+        "session_id",
+        "followup_id",
+        "status_reported",
+        "user_statement",
+        "action_worked"
+      ],
       "properties": {
-        "session_id": { "type": "string", "dynamic_variable": "session_id", "description": "ID de la sesión de seguimiento" },
-        "followup_id": { "type": "string", "dynamic_variable": "followup_id", "description": "ID del seguimiento" },
-        "conversation_id": { "type": "string", "dynamic_variable": "system__conversation_id", "description": "ID de la conversación de ElevenLabs" },
+        "session_id": {
+          "type": "string",
+          "dynamic_variable": "session_id"
+        },
+        "followup_id": {
+          "type": "string",
+          "dynamic_variable": "followup_id"
+        },
+        "conversation_id": {
+          "type": "string",
+          "dynamic_variable": "system__conversation_id"
+        },
         "status_reported": {
           "type": "string",
-          "enum": ["worse", "same", "improved", "resolved", "unknown"],
+          "enum": [
+            "worse",
+            "same",
+            "improved",
+            "resolved",
+            "unknown"
+          ],
           "description": "Cómo sigue la parcela: worse (peor), same (igual), improved (mejor), resolved (ya se resolvió), unknown (no sabe)"
         },
-        "user_statement": { "type": "string", "description": "Resumen breve, con las palabras del agricultor, de lo que contó" },
-        "actions_taken": { "type": "string", "description": "Qué hizo el agricultor en la parcela. Vacío si no hizo nada o no sabe" },
+        "user_statement": {
+          "type": "string",
+          "description": "Resumen breve, con las palabras del agricultor, de lo que contó"
+        },
+        "actions_taken": {
+          "type": "string",
+          "description": "Qué hizo el agricultor en la parcela. Vacío si no hizo nada o no sabe"
+        },
         "action_worked": {
           "type": "string",
-          "enum": ["yes", "no", "partial", "unknown"],
+          "enum": [
+            "yes",
+            "no",
+            "partial",
+            "unknown"
+          ],
           "description": "Si le funcionó lo que hizo: yes, no, partial (en parte) o unknown (no sabe)"
         },
         "change_noticed_days_ago": {

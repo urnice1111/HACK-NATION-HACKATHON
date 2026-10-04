@@ -204,6 +204,7 @@ export class SmsConversation {
       confirm_candidate_token: candidates[choice]!.candidate_token,
       is_demo: this.deps.isDemo,
     });
+    if (!confirmed.ok && confirmed.code === "CANDIDATE_TOKEN_INVALID") return this.refreshCandidates(session);
     if (!confirmed.ok || !confirmed.data.confirmed) return sms.technicalIssue;
 
     const { farmer_id, preferred_language, consent, plots } = confirmed.data.confirmed;
@@ -215,6 +216,29 @@ export class SmsConversation {
       return sms.choosePlot(plots.map((p) => p.label));
     }
     return this.selectPlot(session, plots[0]!.plot_id);
+  }
+
+  /**
+   * El backend firma cada candidato por 15 minutos y solo para esta sesión y teléfono. Si caducó,
+   * se piden candidatos nuevos y se vuelve a preguntar; nunca se confirma a alguien sin su respuesta.
+   */
+  private async refreshCandidates(session: SmsSession): Promise<string> {
+    const resolved = await this.deps.client.resolveContact({
+      schema_version: SCHEMA_VERSION,
+      session_id: session.session_id,
+      phone_e164: session.phone_e164,
+      channel: "sms",
+      confirm_candidate_token: null,
+      is_demo: this.deps.isDemo,
+    });
+    if (!resolved.ok) return sms.technicalIssue;
+    log("info", "sms_candidates_refreshed", { correlation_id: session.session_id, candidates: resolved.data.candidates.length });
+    if (resolved.data.candidates.length === 0) {
+      session.stage = { kind: "consent", scope: "reports" };
+      return `${sms.unknownNumber} ${sms.consent}`;
+    }
+    session.stage = { kind: "identify", candidates: resolved.data.candidates };
+    return sms.identify(resolved.data.candidates.map((c) => c.label), sms.identifyExpired);
   }
 
   private async onChoosePlot(session: SmsSession, plots: { plot_id: string; label: string }[], text: string): Promise<string> {
