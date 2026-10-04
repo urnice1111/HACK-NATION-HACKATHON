@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
-from backend.app.routes import alerts, contacts, environment, followups, graph, plots, reports, resolutions
+from backend.app.routes import alerts, contacts, followups, graph, plots, reports, resolutions, assessments, environment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -62,3 +62,4 @@ app.include_router(alerts.router)
 app.include_router(followups.router)
 app.include_router(resolutions.router)
 app.include_router(environment.router)
+app.include_router(assessments.router)
