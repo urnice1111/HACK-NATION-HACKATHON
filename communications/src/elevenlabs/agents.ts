@@ -3,7 +3,7 @@
  * agents/README.md). Comunicaciones solo los referencia por ID y, antes de usarlos,
  * comprueba que estén configurados como el código espera:
  *
- *  - idioma español y sin grabación de audio (sección 17);
+ *  - idioma español, sin grabación de audio y transcripciones 30 días como máximo (sección 17);
  *  - las herramientas que necesita cada agente, apuntando a PUBLIC_BASE_URL con el
  *    secreto de las herramientas y con parámetros que las rutas `/v1/tools/*` aceptan;
  *  - `session_id` y los IDs salen de variables, nunca del modelo;
@@ -235,6 +235,10 @@ export function agentProblems(agent: AgentRecord, role: AgentRole, publicBaseUrl
   const config = agent.conversation_config.agent;
   if (!config.language?.startsWith("es")) problems.push(`idioma "${config.language ?? "?"}"; debe ser español (es)`);
   if (agent.platform_settings?.privacy?.record_voice !== false) problems.push("graba audio; desactívalo en Privacy (sección 17: sin grabación)");
+  const retention = agent.platform_settings?.privacy?.retention_days;
+  if (retention == null || retention < 0 || retention > 30) {
+    problems.push(`guarda las conversaciones ${retention == null || retention < 0 ? "para siempre" : `${retention} días`}; ponlo en 30 días o menos en Privacy (sección 17)`);
+  }
 
   const tools = config.prompt.tools ?? [];
   for (const name of spec.tools) {

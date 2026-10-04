@@ -47,7 +47,7 @@ function agentFromSnapshot(role: AgentRole): AgentRecord {
       },
       tts: meta.tts,
     },
-    platform_settings: { privacy: meta.privacy },
+    platform_settings: { privacy: { record_voice: false, retention_days: 30 } },
   };
 }
 
@@ -110,7 +110,7 @@ describe("agentes de ElevenLabs: comprobación", () => {
 
   it("detecta grabación, idioma, variables desconocidas y colgar ausente", async () => {
     const followup = variant("followup", (agent) => {
-      agent.platform_settings = { privacy: { record_voice: true } };
+      agent.platform_settings = { privacy: { record_voice: true, retention_days: -1 } };
       agent.conversation_config.agent.language = "en";
       agent.conversation_config.agent.first_message = "Hola {{program_name}}, ¿hablo con {{farmer_name}}?";
       agent.conversation_config.agent.prompt.tools = agent.conversation_config.agent.prompt.tools!.filter((t) => t.name !== "end_call");
@@ -118,6 +118,7 @@ describe("agentes de ElevenLabs: comprobación", () => {
     const { problems } = await checkAgents(fakeApi({ agents: { [IDS.followup]: followup } }), config);
     const text = problems.join("\n");
     assert.match(text, /graba audio/);
+    assert.match(text, /guarda las conversaciones para siempre/);
     assert.match(text, /idioma "en"/);
     assert.match(text, /\{\{program_name\}\}/);
     assert.doesNotMatch(text, /\{\{farmer_name\}\}/, "farmer_name sí lo envía el despachador");

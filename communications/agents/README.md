@@ -67,7 +67,7 @@ ElevenLabs → **Agents → New agent → Blank**:
 2. **Agent**: idioma *Spanish*; *First message* = [`help/first_message.txt`](help/first_message.txt); *System prompt* = [`help/prompt.md`](help/prompt.md); el LLM que elija el equipo.
 3. **Tools**: las seis herramientas de ayuda del paso 3 y la herramienta de sistema **End call**.
 4. **Voice**: la voz y el modelo del equipo (hoy, voz `YOq2y2Up4RgXP2HyXjE5` con *V4 Turbo* y *Expressive mode*; ver [`help/agent.json`](help/agent.json)).
-5. **Privacy** (sección 17): desactiva la grabación de audio; retención de conversaciones de 30 días.
+5. **Privacy** (sección 17): desactiva la grabación de audio y pon la retención de conversaciones en 30 días (no "ilimitada"; `agents:check` lo exige).
 6. Guarda y copia el ID (`agent_…`) a `ELEVENLABS_HELP_AGENT_ID`.
 7. **Phone Numbers** → el número → *Agent*: este agente (contesta las llamadas entrantes).
 
