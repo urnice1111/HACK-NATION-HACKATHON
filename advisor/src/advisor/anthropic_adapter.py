@@ -17,10 +17,11 @@ from .assessment import AssessmentGenerationError, ModelDraft, TwoStepAssessor, 
 from .prompt import build_planner_prompt, build_system_prompt
 from .tools import MAX_INTERNAL_QUERIES, TOOL_DEFINITIONS, AdvisorToolGateway
 
-DEFAULT_MODEL = "claude-opus-5-5"
+# Measured 2026-10-04 against the real backend: Haiku 4.5 answers in ~3.6 s per turn; Opus 5.5 missed the 5 s budget.
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_EFFORT = "low"
 PLANNER_TIMEOUT_SECONDS = float(os.getenv("ADVISOR_PLANNER_TIMEOUT_S", "3.0"))
-DECISION_TIMEOUT_SECONDS = float(os.getenv("ADVISOR_DECISION_TIMEOUT_S", "5.0"))
+DECISION_TIMEOUT_SECONDS = float(os.getenv("ADVISOR_DECISION_TIMEOUT_S", "7.0"))  # communications waits up to 10 s
 # Room for adaptive thinking at low effort plus the short JSON; the answer itself is ~100 tokens.
 PLANNER_MAX_TOKENS = 2048
 DECISION_MAX_TOKENS = 4096
@@ -53,7 +54,7 @@ class AnthropicAssessor(TwoStepAssessor):
         effort: str | None = None,
     ) -> None:
         super().__init__(model or os.getenv("ADVISOR_MODEL", DEFAULT_MODEL), gateway,
-                         planner or os.getenv("ADVISOR_PLANNER", "model"))
+                         planner or os.getenv("ADVISOR_PLANNER", "fixed"))  # env + resolved cases first; "model" lets the model plan
         self._api_key = api_key if api_key is not None else os.getenv("ANTHROPIC_API_KEY")
         self._workspace_id = os.getenv("ANTHROPIC_WORKSPACE_ID")
         self._effort = effort or os.getenv("ADVISOR_EFFORT", DEFAULT_EFFORT)
