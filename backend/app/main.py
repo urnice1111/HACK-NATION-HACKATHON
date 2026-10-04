@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
-from backend.app.routes import contacts, graph, plots, reports
+from backend.app.routes import alerts, contacts, graph, plots, reports
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -33,6 +33,7 @@ async def request_id(request: Request, call_next):
 
 
 @app.get("/health", tags=["health"])
+@app.get("/v1/health", tags=["health"])
 def health():
     try:
         with pool.connection(timeout=2) as conn:
@@ -46,3 +47,4 @@ app.include_router(contacts.router)
 app.include_router(plots.router)
 app.include_router(reports.router)
 app.include_router(graph.router)
+app.include_router(alerts.router)

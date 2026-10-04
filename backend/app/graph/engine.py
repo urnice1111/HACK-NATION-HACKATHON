@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from psycopg import Connection
 from psycopg.types.json import Jsonb
 
+from backend.app.alerts import propose_alerts
 from backend.app.graph.risk import apply_artifact
 from contracts.enums import EventType
 from contracts.models import RiskModelArtifact
@@ -33,6 +34,16 @@ REASONS = {
     "rain_anomaly_30d": "Lluvia por encima de lo normal",
     "temp_optimal_days_14d": "Temperaturas favorables para la roya",
 }
+
+
+@dataclass
+class Evaluation:
+    plot_id: str
+    risk_evaluation_id: str
+    priority: str
+    has_own_case: bool
+    neighbor_case_ids: list[str]
+    is_demo: bool
 
 
 @dataclass
@@ -137,10 +148,12 @@ def recalculate(conn: Connection, threat_code: str) -> dict:
         ).fetchone()
         artifact = RiskModelArtifact.model_validate(model["artifact"]) if model else None
 
-        changed = []
-        for plot in plots:
-            if evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifact):
-                changed.append(plot["id"])
+        evaluations = [
+            ev for plot in plots
+            if (ev := evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifact))
+        ]
+        changed = [ev.plot_id for ev in evaluations]
+        proposed = propose_alerts(conn, threat_code, evaluations)
 
         version = conn.execute(
             """
@@ -151,12 +164,14 @@ def recalculate(conn: Connection, threat_code: str) -> dict:
             (threat_code,),
         ).fetchone()["version"]
 
-    log.info("graph recalculated threat=%s version=%d edges=%d changed=%s",
-             threat_code, version, len(edges), changed)
-    return {"threat_code": threat_code, "graph_version": version, "changed_plot_ids": changed}
+    log.info("graph recalculated threat=%s version=%d edges=%d changed=%s alerts=%s",
+             threat_code, version, len(edges), changed, proposed)
+    return {"threat_code": threat_code, "graph_version": version, "changed_plot_ids": changed,
+            "proposed_alert_ids": proposed}
 
 
-def evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifact) -> bool:
+def evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifact) -> "Evaluation | None":
+    """Saves a new evaluation if anything changed; returns it, or None when unchanged."""
     pid = plot["id"]
     neighbor_cases = []
     exposure = 0.0
@@ -201,7 +216,7 @@ def evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifa
     if previous and (previous["score"], previous["inspection_priority"], previous["feature_vector"],
                      sorted(previous["source_case_ids"]), previous["model_version"]) == (
             score, priority, inputs, sorted(source_case_ids), model_version):
-        return False
+        return None
 
     evaluation_id = conn.execute(
         """
@@ -227,4 +242,6 @@ def evaluate_plot(conn, plot, threat_code, env, summaries, active, edges, artifa
                 "inspection_priority": priority,
                 "previous_priority": previous["inspection_priority"] if previous else None})),
     )
-    return True
+    return Evaluation(plot_id=pid, risk_evaluation_id=evaluation_id, priority=priority,
+                      has_own_case=pid in active, neighbor_case_ids=sorted(set(neighbor_cases)),
+                      is_demo=plot["is_demo"])

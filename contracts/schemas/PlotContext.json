@@ -42,62 +42,6 @@
       "title": "ActiveCase",
       "type": "object"
     },
-    "CurrentRisk": {
-      "properties": {
-        "threat_code": {
-          "title": "Threat Code",
-          "type": "string"
-        },
-        "inspection_priority": {
-          "$ref": "#/$defs/InspectionPriority"
-        },
-        "score": {
-          "anyOf": [
-            {
-              "maximum": 1,
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Score"
-        },
-        "reasons": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Reasons",
-          "type": "array"
-        },
-        "model_version": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Model Version"
-        },
-        "heuristic": {
-          "title": "Heuristic",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "threat_code",
-        "inspection_priority",
-        "score",
-        "model_version",
-        "heuristic"
-      ],
-      "title": "CurrentRisk",
-      "type": "object"
-    },
     "DataFreshness": {
       "enum": [
         "fresh",
@@ -107,55 +51,114 @@
       "title": "DataFreshness",
       "type": "string"
     },
-    "EnvironmentSummary": {
+    "EnvFeature": {
       "properties": {
-        "computed_at": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
           "anyOf": [
             {
-              "format": "date-time",
-              "type": "string"
+              "type": "number"
             },
             {
               "type": "null"
             }
           ],
-          "title": "Computed At"
+          "title": "Value"
         },
-        "features": {
-          "additionalProperties": true,
-          "title": "Features",
-          "type": "object"
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit"
+      ],
+      "title": "EnvFeature",
+      "type": "object"
+    },
+    "EnvironmentSummary": {
+      "properties": {
+        "computed_at": {
+          "format": "date-time",
+          "title": "Computed At",
+          "type": "string"
         },
         "data_freshness": {
           "$ref": "#/$defs/DataFreshness"
+        },
+        "features": {
+          "items": {
+            "$ref": "#/$defs/EnvFeature"
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "dataset_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dataset Ids",
+          "type": "array"
         }
       },
       "required": [
         "computed_at",
-        "features",
-        "data_freshness"
+        "data_freshness",
+        "features"
       ],
       "title": "EnvironmentSummary",
       "type": "object"
     },
-    "InspectionPriority": {
-      "enum": [
-        "unknown",
-        "low",
-        "medium",
-        "high"
+    "PendingFollowup": {
+      "properties": {
+        "followup_id": {
+          "title": "Followup Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "due_at": {
+          "format": "date-time",
+          "title": "Due At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "followup_id",
+        "case_id",
+        "due_at",
+        "status"
       ],
-      "title": "InspectionPriority",
-      "type": "string"
+      "title": "PendingFollowup",
+      "type": "object"
     }
   },
+  "description": "No coordinates or contact data: this goes to the voice agent.",
   "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
     "plot_id": {
       "title": "Plot Id",
       "type": "string"
     },
-    "name": {
-      "title": "Name",
+    "label": {
+      "title": "Label",
       "type": "string"
     },
     "crop": {
@@ -191,6 +194,19 @@
       ],
       "title": "Altitude M"
     },
+    "data_freshness": {
+      "$ref": "#/$defs/DataFreshness"
+    },
+    "environment_summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EnvironmentSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "active_cases": {
       "items": {
         "$ref": "#/$defs/ActiveCase"
@@ -198,15 +214,12 @@
       "title": "Active Cases",
       "type": "array"
     },
-    "risk": {
+    "pending_followups": {
       "items": {
-        "$ref": "#/$defs/CurrentRisk"
+        "$ref": "#/$defs/PendingFollowup"
       },
-      "title": "Risk",
+      "title": "Pending Followups",
       "type": "array"
-    },
-    "environment_summary": {
-      "$ref": "#/$defs/EnvironmentSummary"
     },
     "is_demo": {
       "title": "Is Demo",
@@ -215,13 +228,14 @@
   },
   "required": [
     "plot_id",
-    "name",
+    "label",
     "crop",
     "variety",
     "altitude_m",
-    "active_cases",
-    "risk",
+    "data_freshness",
     "environment_summary",
+    "active_cases",
+    "pending_followups",
     "is_demo"
   ],
   "title": "PlotContext",

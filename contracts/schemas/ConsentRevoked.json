@@ -1,0 +1,30 @@
+{
+  "properties": {
+    "contacts_updated": {
+      "title": "Contacts Updated",
+      "type": "integer"
+    },
+    "scopes": {
+      "items": {
+        "enum": [
+          "notifications",
+          "followup_calls"
+        ],
+        "type": "string"
+      },
+      "title": "Scopes",
+      "type": "array"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "contacts_updated",
+    "scopes",
+    "is_demo"
+  ],
+  "title": "ConsentRevoked",
+  "type": "object"
+}

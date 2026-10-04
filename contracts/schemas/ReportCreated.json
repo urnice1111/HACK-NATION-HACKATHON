@@ -16,8 +16,15 @@
       "type": "string"
     },
     "case_id": {
-      "title": "Case Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Case Id"
     },
     "received_at": {
       "format": "date-time",
