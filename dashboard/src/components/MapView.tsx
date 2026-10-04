@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react'
 import MapGL, { Layer, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre'
+import { setWorkerUrl } from 'maplibre-gl'
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { GraphResponse } from '../api/types'
 import { PRIORITY, hasDirectCase } from '../lib/priority'
+
+// MapLibre 6 busca su worker junto a su propio archivo. En el build de producción Vite no lo copia
+// y el servidor devuelve index.html en su lugar (mapa negro). Con ?worker&url Vite lo empaqueta junto con
+// sus imports y aquí se le dice a MapLibre dónde quedó.
+setWorkerUrl(workerUrl)
 
 // Mapa base oscuro gratuito y sin API key (OpenFreeMap).
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark'
