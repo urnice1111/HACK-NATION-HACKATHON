@@ -1,0 +1,1 @@
+Hola, buenas. Soy el asistente automático del programa de café; le llamo para saber cómo sigue su parcela. ¿Hablo con {{farmer_name}}?

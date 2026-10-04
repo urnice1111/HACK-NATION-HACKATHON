@@ -1,0 +1,27 @@
+{
+  "name": "communications",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integrante 1: adaptadores Twilio/ElevenLabs, sesiones, entrega y seguimiento del MVP agrícola",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/server/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/server/main.ts",
+    "mock:backend": "tsx --env-file-if-exists=.env src/mock-backend/main.ts",
+    "mock:backend:dev": "tsx watch --env-file-if-exists=.env src/mock-backend/main.ts",
+    "typecheck": "tsc",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "twilio": "^5.13.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
