@@ -923,20 +923,35 @@ El MVP está terminado cuando este recorrido funciona con los servicios reales d
 
 ## 17. Decisiones aún por completar
 
-- [ ] Amenaza y protocolo seleccionados: __________
-- [ ] Región y lengua: __________
-- [ ] Nombres de integrantes 1/2/3/4: __________
-- [ ] Modelo de lenguaje y acceso confirmado: __________
-- [ ] Backend elegido y URL base: __________
-- [ ] Datasets: cobertura de la región elegida y variables disponibles: __________
-- [ ] Variable objetivo de la regresión y origen de las etiquetas (columna real de los datasets, reportes confirmados o sintéticas para demo): __________
-- [ ] Cortes del score para `medium` y `high`: __________
-- [ ] Catálogo inicial de `need_code`: __________
-- [ ] Límite de consultas internas por turno y presupuesto de tiempo: __________
-- [ ] Intervalo de seguimiento en demo y en uso real; número de reintentos antes de SMS: __________
-- [ ] Pesos, radio y ventana de aristas revisados con asesor: __________
-- [ ] Política de consentimiento/horarios/retención, incluidas llamadas salientes: __________
-- [ ] Estrategia explícita para el requisito offline del reto: __________
+Decisiones tomadas el 2026-10-03. `[x]` = decidido; `[ ]` = depende de algo externo y queda pendiente de confirmar. Cualquier cambio posterior se anota aquí y se actualizan mocks y fixtures.
+
+- [x] **Amenaza y protocolo seleccionados:** roya del café (*Hemileia vastatrix*). `threat_code: coffee_leaf_rust`. Protocolo `coffee-rust-demo-v1`: solo prácticas culturales (retirar y enterrar hojas afectadas, regular sombra, podar para ventilar, control de maleza, nutrición, vigilar plantas vecinas). Cualquier fungicida, producto o dosis → `refer` a agrónomo. El protocolo es de demo y debe revisarlo el integrante 2 con la entrevista agrícola. Hipótesis alternativas que el asesor debe distinguir: ojo de gallo (*Mycena citricolor*), mancha de hierro (*Cercospora*), minador de la hoja.
+- [x] **Región y lengua:** zona cafetalera del centro de Veracruz, México (Xalapa–Coatepec–Huatusco, aprox. lat 19.0–19.6, lon -97.1 a -96.7). Español de México (`es`, `es-MX` para voz). Zona horaria `America/Mexico_City`. Si los datasets del reto no cubren esta zona, la región se mueve a la que cubran y se mantienen la amenaza y el idioma.
+- [ ] **Nombres de integrantes 1/2/3/4:** integrante 3 = usuario de este repositorio (backend y grafo); 1, 2 y 4 por asignar en la reunión.
+- [ ] **Modelo de lenguaje y acceso confirmado:** asesor con `gpt-4.1-mini` (OpenAI) usando Structured Outputs con el esquema JSON de `assessments`; alternativa equivalente: Claude Sonnet con tool use. La salida del modelo siempre se revalida con Pydantic en el servicio. El acceso y los créditos los confirma el integrante 2.
+- [x] **Backend elegido y URL base:** Python 3.12 + FastAPI + Pydantic v2 + psycopg 3 sobre Supabase Postgres (un proyecto, esquemas `public` y `env`). Migraciones SQL versionadas en `backend/migrations/`. El worker es un proceso Python separado del mismo código; lee `outbox_events` y `jobs` con `FOR UPDATE SKIP LOCKED` cada 2 s e incluye el scheduler de seguimientos. Despliegue en Render (servicio web + worker, HTTPS). URL de desarrollo `http://localhost:8000/v1`; la URL pública se anota al primer despliegue. Autenticación: tokens de servicio Bearer por consumidor (`comms`, `advisor`, `data`) para las herramientas y JWT de Supabase Auth con rol en `app_metadata` para el dashboard.
+- [ ] **Datasets: cobertura de la región elegida y variables disponibles:** el reto proporciona los datasets; inventario pendiente (integrante 4). Variables mínimas que necesitan el asesor y el modelo: `precip_mm` (diaria), `humidity_pct` (humedad relativa media diaria), `temp_max_c`, `temp_min_c`, `temp_mean_c`. Si falta humedad, se sustituye por punto de rocío o días con lluvia y se actualiza el catálogo.
+- [x] **Variable objetivo de la regresión y origen de las etiquetas:** si los datasets traen incidencia o severidad de roya, se usa esa columna. Si no, para la demo: `rust_pressure_index` ∈ [0,1], presión de roya esperada en la parcela en los próximos 30 días, con etiquetas sintéticas de una regla documentada (humedad alta, temperatura 21–25 °C, lluvia sobre lo normal, exposición a casos fuente y reportes directos, más ruido) y `labels_are_synthetic: true`. En operación real se reemplaza por casos confirmados o descartados en inspección, con una regresión logística en el mismo formato de artefacto.
+- [x] **Cortes del score para `medium` y `high`:** `medium ≥ 0.40`, `high ≥ 0.70`, `score_range [0,1]`. El integrante 2 puede ajustarlos tras entrenar, solo publicando una nueva versión del artefacto.
+- [x] **Catálogo inicial de `need_code`:** solo datos que aporta el agricultor (clima, humedad y temperatura se consultan en `env`, no se preguntan).
+
+  | `need_code` | `answer_type` | Para qué sirve |
+  | --- | --- | --- |
+  | `leaf_underside` | `choice`: polvo naranja o amarillo / pelusa blanca / insectos o galerías / nada / no sé | Distingue roya de ojo de gallo y minador |
+  | `spot_appearance` | `choice`: manchas amarillas o naranjas / manchas cafés con centro claro / manchas redondas grises / otro | Distingue roya de cercospora y ojo de gallo |
+  | `affected_extent` | `choice`: pocas plantas / un sector / casi toda la parcela / no sé | Urgencia y extensión |
+  | `leaf_drop` | `yes_no` | Defoliación, señal de severidad |
+  | `symptom_onset_days` | `number_with_unit` (días) | Fecha aproximada de observación |
+  | `coffee_variety` | `free_text` | Variedades susceptibles (Typica, Bourbon, Caturra) frente a tolerantes |
+  | `shade_level` | `choice`: sin sombra / poca / mucha / no sé | Microclima de la parcela |
+  | `local_weather_perception` | `free_text` | Confirmar en la parcela lo que dicen los datos de la celda cercana |
+  | `actions_taken` | `free_text` | Qué ha hecho ya el agricultor |
+
+- [x] **Límite de consultas internas por turno y presupuesto de tiempo:** máximo 3 consultas internas por turno (`env_query`, casos resueltos, contexto externo). Timeout de 2 s por consulta y presupuesto de 5 s por turno. Si se agota, el asesor responde con lo que tenga y `context_stale: true`, sin inventar datos. Máximo 3 rondas y 5 preguntas al agricultor por llamada; después, `advise` con lo disponible o `refer`.
+- [x] **Intervalo de seguimiento en demo y en uso real; número de reintentos antes de SMS:** demo: 3 minutos tras abrir caso o pasar a `medium`/`high`, reintentos cada 2 minutos. Real: 7 días, reintentos cada 2 horas dentro del horario permitido. Dos reintentos (3 intentos de llamada en total); después, un SMS. Sin respuesta → `no_response`, nunca baja el riesgo.
+- [x] **Pesos, radio y ventana de aristas** (hipotéticos para la demo, `rule_version: edges-v1-hypothetical`, pendientes de revisión con el asesor): se crea arista entre parcelas a ≤ 10 km, con un máximo de 5 vecinos por parcela. `environment_similarity = 1 − distancia euclidiana normalizada` sobre características estandarizadas de `env.plot_summary` (humedad media 14 d, anomalía de lluvia 30 d, temperatura media 14 d), en ventana de 30 días. `exposure_type: proximity`, simétrica; `exposure_strength = exp(−distance_km / 5)` solo si existe un caso fuente activo en el otro extremo, si no `null`. La similitud ambiental por sí sola nunca crea exposición.
+- [x] **Política de consentimiento/horarios/retención, incluidas llamadas salientes:** consentimiento verbal explícito en la primera llamada, con tres permisos separados: guardar reportes, recibir avisos y recibir llamadas de seguimiento. Se guardan con `consent_at`. Responder "BAJA" por SMS revoca avisos y seguimientos. Horario permitido por defecto: 08:00–19:00 hora local, todos los días. Fuera de horario, el trabajo espera. Sin grabación de audio por defecto. Las transcripciones se conservan 30 días (en demo se borran con el reinicio); los campos estructurados se conservan. Teléfonos enmascarados en logs. En demo solo se llama o escribe a números en lista blanca.
+- [x] **Estrategia explícita para el requisito offline del reto:** en la demo se declara **no cumplido**. Voz y SMS evitan que el agricultor necesite datos móviles o una aplicación, pero el servicio sí necesita internet. Propuesta para después del MVP: modo degradado local en una cooperativa, con el backend y un módem GSM como pasarela SMS, un asesor por reglas (árbol de decisión sobre el catálogo de `need_code` y el protocolo) y el artefacto JSON de riesgo, que no tiene dependencias externas. En ese modo no se usan ElevenLabs ni el modelo de lenguaje. Los reportes se sincronizan al volver la conexión con las mismas claves de idempotencia.
 
 Sobre la variable objetivo: una regresión necesita ejemplos con la respuesta conocida. Si los datasets traen una columna de incidencia, daño o pérdida de rendimiento, esa es la mejor opción. Si no, las etiquetas pueden salir de reportes confirmados conforme el sistema opere; para la demo pueden ser sintéticas, siempre marcadas con `labels_are_synthetic: true`.
 
