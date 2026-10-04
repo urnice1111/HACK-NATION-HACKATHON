@@ -1,0 +1,123 @@
+# Render Blueprint (INSTRUCTIONS.md section 17: Render, HTTPS). New → Blueprint → this repo.
+# Values marked `sync: false` are secrets or account-specific: Render asks for them when the
+# Blueprint is created and they never live in the repo. Supabase (DATABASE_URL) is not managed here.
+#
+# After the first deploy, point everything that still uses ngrok to the new URLs
+# (see communications/agents/README.md): the 10 ElevenLabs tools, the ElevenLabs post-call
+# webhook and the Twilio SMS webhook of both numbers. Then run `npm run agents:check`.
+
+services:
+  # Backend API + advisor (same process). Communications and the dashboard call it.
+  - type: web
+    name: agro-backend
+    runtime: python
+    plan: starter
+    buildCommand: pip install .
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Fixed so the advisor can call this same process (environment and resolved-case queries).
+      - key: PORT
+        value: "10000"
+      - key: ADVISOR_BACKEND_BASE_URL
+        value: http://127.0.0.1:10000
+      - key: APP_ENV
+        value: prod
+      - key: TOKEN_SECRET
+        generateValue: true
+      - key: DATABASE_URL # Supabase connection string (pooler)
+        sync: false
+      - key: ADVISOR_MODE
+        value: openai # real advisor; "mock" for a fixed answer without a model
+      - key: ADVISOR_PROVIDER
+        value: anthropic # Claude Haiku 4.5, ~3.6 s per turn
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_WORKSPACE_ID
+        sync: false
+      - key: CORS_ORIGINS # https://<agro-dashboard URL>, no trailing slash
+        sync: false
+
+  # Communications: Twilio/ElevenLabs webhooks, voice tools, follow-up and alert calls.
+  # One always-on instance: calls and SMS conversations in progress live in memory.
+  - type: web
+    name: agro-communications
+    runtime: node
+    plan: starter
+    numInstances: 1
+    rootDir: communications
+    buildCommand: npm ci --include=dev
+    startCommand: npm start
+    healthCheckPath: /v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: COMMS_HOST
+        value: 0.0.0.0
+      - key: IS_DEMO
+        value: "true"
+      - key: DEFAULT_LANGUAGE
+        value: en
+      - key: ADVISOR_BASE_URL
+        value: "" # empty = the backend's POST /v1/assessments
+      - key: DEMO_IGNORE_ALLOWED_HOURS
+        value: "false" # "true" only to record outside 08:00–19:00 Mexico City
+      - key: FOLLOWUP_POLL_INTERVAL_MS
+        value: "30000" # follow-ups are called on their own once due; 0 = only via /dispatch
+      - key: ALERT_POLL_INTERVAL_MS
+        value: "15000"
+      - key: PUBLIC_BASE_URL # https://<agro-communications URL>, no trailing slash
+        sync: false
+      - key: BACKEND_BASE_URL # https://<agro-backend URL>
+        sync: false
+      - key: BACKEND_SERVICE_TOKEN
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER # number that sends SMS (the help line)
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_HELP_AGENT_ID
+        sync: false
+      - key: ELEVENLABS_FOLLOWUP_AGENT_ID
+        sync: false
+      - key: ELEVENLABS_ALERT_AGENT_ID
+        sync: false
+      - key: HELP_AGENT_TELEPHONE
+        sync: false
+      - key: HELP_AGENT_TELEPHONE_ID
+        sync: false
+      - key: FOLLOW_UP_AGENT_PHONE
+        sync: false
+      - key: FOLLOW_UP_AGENT_PHONE_ID
+        sync: false
+      - key: ELEVENLABS_TOOL_SECRET
+        sync: false
+      - key: ELEVENLABS_WEBHOOK_SECRET
+        sync: false
+      - key: COMMS_SERVICE_TOKEN
+        sync: false
+      - key: DEMO_ALLOWED_NUMBERS # comma-separated E.164 numbers allowed to receive calls in demo
+        sync: false
+
+  # Dashboard (Vite SPA).
+  - type: web
+    name: agro-dashboard
+    runtime: static
+    rootDir: dashboard
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_MODE
+        value: http
+      - key: VITE_API_URL # https://<agro-backend URL>/v1
+        sync: false
