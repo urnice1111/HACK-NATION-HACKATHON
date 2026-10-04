@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "ResolutionOut": {
+      "description": "Dashboard view (operators only): includes the plot, unlike the advisor search.",
+      "properties": {
+        "resolution_id": {
+          "title": "Resolution Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "plot_id": {
+          "title": "Plot Id",
+          "type": "string"
+        },
+        "plot_label": {
+          "title": "Plot Label",
+          "type": "string"
+        },
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "symptoms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symptoms",
+          "type": "array"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        },
+        "solution_statement": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Solution Statement"
+        },
+        "solution_codes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Solution Codes"
+        },
+        "matches_protocol": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matches Protocol"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        },
+        "followup_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Followup Id"
+        },
+        "verified_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verified By"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "resolution_id",
+        "case_id",
+        "plot_id",
+        "plot_label",
+        "threat_code",
+        "symptoms",
+        "resolved_at",
+        "solution_statement",
+        "solution_codes",
+        "matches_protocol",
+        "outcome",
+        "verification",
+        "followup_id",
+        "verified_by",
+        "is_demo"
+      ],
+      "title": "ResolutionOut",
+      "type": "object"
+    },
+    "Verification": {
+      "enum": [
+        "farmer_reported",
+        "verified",
+        "disputed"
+      ],
+      "title": "Verification",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "resolutions": {
+      "items": {
+        "$ref": "#/$defs/ResolutionOut"
+      },
+      "title": "Resolutions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "resolutions"
+  ],
+  "title": "ResolutionList",
+  "type": "object"
+}

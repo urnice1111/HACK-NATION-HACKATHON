@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
-from backend.app.routes import alerts, contacts, graph, plots, reports
+from backend.app.routes import alerts, contacts, environment, followups, graph, plots, reports, resolutions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -48,3 +48,6 @@ app.include_router(plots.router)
 app.include_router(reports.router)
 app.include_router(graph.router)
 app.include_router(alerts.router)
+app.include_router(followups.router)
+app.include_router(resolutions.router)
+app.include_router(environment.router)

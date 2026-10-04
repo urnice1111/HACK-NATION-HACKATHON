@@ -10,15 +10,6 @@
       "title": "ActionWorked",
       "type": "string"
     },
-    "Channel": {
-      "enum": [
-        "voice",
-        "sms",
-        "operator"
-      ],
-      "title": "Channel",
-      "type": "string"
-    },
     "StatusReported": {
       "enum": [
         "worse",
@@ -44,22 +35,19 @@
       "type": "string"
     },
     "channel": {
-      "$ref": "#/$defs/Channel"
+      "enum": [
+        "voice",
+        "sms"
+      ],
+      "title": "Channel",
+      "type": "string"
     },
     "status_reported": {
       "$ref": "#/$defs/StatusReported"
     },
     "user_statement": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "User Statement"
+      "title": "User Statement",
+      "type": "string"
     },
     "actions_taken": {
       "anyOf": [
@@ -111,6 +99,7 @@
     "session_id",
     "channel",
     "status_reported",
+    "user_statement",
     "is_demo"
   ],
   "title": "FollowUpResponseRequest",
