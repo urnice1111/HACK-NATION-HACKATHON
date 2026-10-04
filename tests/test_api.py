@@ -112,6 +112,44 @@ def test_plot_without_env_summary_is_null_not_error(client):
 
 def test_unknown_plot_is_404(client):
     assert_uniform_error(client.get("/v1/plots/nope/context"), 404, "NOT_FOUND")
+    assert_uniform_error(client.get("/v1/plots/nope/timeline"), 404, "NOT_FOUND")
+
+
+def test_plot_timeline_lists_history_newest_first(client):
+    resp = client.get("/v1/plots/plot_demo_01/timeline")
+    body = resp.json()
+    assert resp.status_code == 200
+    assert set(body) == {"schema_version", "plot_id", "events", "next_cursor", "is_demo"}
+    assert body["plot_id"] == "plot_demo_01"
+    types = [e["event_type"] for e in body["events"]]
+    assert types == ["followup.due", "risk.updated", "report.created"]
+    assert {e["event_id"] for e in body["events"]} == {
+        "followup_demo_01", "risk_demo_01", "report_demo_01",
+    }
+    assert all(UTC_Z.match(e["occurred_at"]) for e in body["events"])
+    assert "+52" not in resp.text
+    event = body["events"][0]
+    assert set(event) == {"event_id", "event_type", "occurred_at", "summary", "threat_code",
+                          "case_id", "report_id", "followup_id", "resolution_id", "is_demo"}
+
+
+def test_plot_timeline_includes_resolution(client):
+    types = {e["event_type"] for e in client.get("/v1/plots/plot_demo_06/timeline").json()["events"]}
+    assert types == {"risk.updated", "report.created", "followup.responded", "case.resolved"}
+
+
+def test_plot_timeline_pages_with_cursor(client):
+    first = client.get("/v1/plots/plot_demo_01/timeline", params={"limit": 1}).json()
+    assert len(first["events"]) == 1
+    assert first["events"][0]["event_id"] == "followup_demo_01"
+    assert first["next_cursor"]
+
+    second = client.get("/v1/plots/plot_demo_01/timeline",
+                        params={"limit": 2, "cursor": first["next_cursor"]}).json()
+    assert [e["event_id"] for e in second["events"]] == ["risk_demo_01", "report_demo_01"]
+    assert second["next_cursor"] is None
+    assert_uniform_error(client.get("/v1/plots/plot_demo_01/timeline", params={"cursor": "bad"}),
+                         422, "VALIDATION_ERROR")
 
 
 def test_consents_update_only_given_permissions(client):

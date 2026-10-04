@@ -17,6 +17,7 @@ EXPORTED = [
     models.ConsentRevocationRequest,
     models.ConsentRevoked,
     models.PlotContext,
+    models.PlotTimeline,
     models.ReportDetail,
     models.AssessmentRequest,
     models.AssessmentResponse,

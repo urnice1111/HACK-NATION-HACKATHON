@@ -240,6 +240,35 @@ class PlotContext(Response):
     is_demo: bool
 
 
+class PlotTimelineEvent(Response):
+    """One thing that happened on the plot. No phone or farmer name."""
+
+    event_id: str
+    event_type: Literal[
+        "report.created",
+        "risk.updated",
+        "followup.due",
+        "followup.responded",
+        "case.resolved",
+    ]
+    occurred_at: UtcDatetime
+    summary: str
+    threat_code: str | None
+    case_id: str | None
+    report_id: str | None
+    followup_id: str | None
+    resolution_id: str | None
+    is_demo: bool
+
+
+class PlotTimeline(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    plot_id: str
+    events: list[PlotTimelineEvent]
+    next_cursor: str | None = None
+    is_demo: bool
+
+
 # --- 10.1 Assessments ---------------------------------------------------------
 
 
