@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "EnvFeature": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "unit"
+      ],
+      "title": "EnvFeature",
+      "type": "object"
+    },
+    "EnvironmentSummary": {
+      "properties": {
+        "computed_at": {
+          "format": "date-time",
+          "title": "Computed At",
+          "type": "string"
+        },
+        "data_freshness": {
+          "$ref": "#/$defs/DataFreshness"
+        },
+        "features": {
+          "items": {
+            "$ref": "#/$defs/EnvFeature"
+          },
+          "title": "Features",
+          "type": "array"
+        },
+        "dataset_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dataset Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "computed_at",
+        "data_freshness",
+        "features"
+      ],
+      "title": "EnvironmentSummary",
+      "type": "object"
+    }
+  },
+  "description": "environment_summary is null when the plot has no data (outside coverage); never zeros.",
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "plot_id": {
+      "title": "Plot Id",
+      "type": "string"
+    },
+    "environment_summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EnvironmentSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "data_freshness": {
+      "$ref": "#/$defs/DataFreshness"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "plot_id",
+    "environment_summary",
+    "data_freshness",
+    "is_demo"
+  ],
+  "title": "PlotEnvironmentSummary",
+  "type": "object"
+}

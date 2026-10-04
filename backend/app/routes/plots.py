@@ -5,7 +5,7 @@ from psycopg import Connection
 
 from backend.app.db import get_conn
 from backend.app.errors import ApiError
-from contracts.models import EnvFeature, EnvironmentSummary, PlotContext, PlotTimeline
+from contracts.models import EnvFeature, EnvironmentSummary, PlotAssessmentList, PlotContext, PlotTimeline
 
 router = APIRouter(prefix="/v1/plots", tags=["plots"])
 
@@ -182,3 +182,26 @@ def plot_timeline(
         rows = rows[:limit]
 
     return PlotTimeline(plot_id=plot_id, events=rows, next_cursor=next_cursor, is_demo=plot["is_demo"])
+
+@router.get("/{plot_id}/assessments", response_model=PlotAssessmentList)
+def plot_assessments(plot_id: str, conn: Connection = Depends(get_conn)):
+    """For the operator dashboard: which environmental data the advisor used and what it recommended."""
+    if conn.execute("select 1 from plots where id = %s", (plot_id,)).fetchone() is None:
+        raise ApiError(404, "Parcela no encontrada")
+    rows = conn.execute(
+        """
+        select a.id as assessment_id, a.report_id, a.created_at, a.disposition, a.suspected_issue,
+               a.evidence_quality, a.urgency, a.data_used, a.recommendations, a.human_review_required,
+               a.model_version, a.protocol_version, a.is_demo,
+               coalesce((
+                 select json_agg(json_build_object(
+                   'resolution_id', cr.id,
+                   'summary_for_speech', coalesce(cr.solution_statement, 'Sin descripción de la solución'),
+                   'verification', cr.verification))
+                 from case_resolutions cr where cr.id = any(a.resolved_case_ids)), '[]') as resolved_case_mentions
+        from assessments a where a.plot_id = %s
+        order by a.created_at desc
+        """,
+        (plot_id,),
+    ).fetchall()
+    return PlotAssessmentList(assessments=rows)

@@ -352,6 +352,30 @@ class AssessmentResponse(Response):
     protocol_version: str
 
 
+class PlotAssessment(Response):
+    """Dashboard view of a stored assessment: what the advisor looked at and said."""
+
+    assessment_id: str
+    report_id: str | None
+    created_at: UtcDatetime
+    disposition: Disposition
+    suspected_issue: SuspectedIssue | None = None
+    evidence_quality: EvidenceQuality
+    urgency: Urgency
+    data_used: list[DataUsed] = []
+    resolved_case_mentions: list[ResolvedCaseMention] = []
+    recommendations: list[Recommendation] = []
+    human_review_required: bool
+    model_version: str
+    protocol_version: str
+    is_demo: bool
+
+
+class PlotAssessmentList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    assessments: list[PlotAssessment]
+
+
 # --- 10.2 Environment query (owner: integrante 4) ---------------------------------
 
 
@@ -394,6 +418,57 @@ class EnvResult(Response):
     anomaly_ratio: float | None = None
     coverage: Unit
     missing_days: int = Field(ge=0)
+
+
+class EnvCatalogVariable(Response):
+    code: str
+    label: str
+    unit: str
+    description: str
+    temporal_resolution: str
+    coverage_start: date | None
+    coverage_end: date | None
+    allowed_aggregations: list[Aggregation]
+    dataset_id: str
+
+
+class EnvCatalogResponse(Response):
+    """What the advisor may ask env_query for. Anything else is a 422."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    variables: list[EnvCatalogVariable]
+    max_variables_per_query: int = 5
+    max_days_back: int = 365
+
+
+class PlotEnvironmentSummary(Response):
+    """environment_summary is null when the plot has no data (outside coverage); never zeros."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    plot_id: str
+    environment_summary: EnvironmentSummary | None
+    data_freshness: DataFreshness
+    is_demo: bool
+
+
+class ExternalContextItem(Response):
+    source_id: str
+    url: str
+    title: str | None
+    retrieved_at: UtcDatetime
+    valid_until: UtcDatetime | None
+    region: str | None
+    data_type: str | None
+    content: str | None
+
+
+class ExternalContextResponse(Response):
+    """Only reviewed, still-valid context. Content is data for the advisor, never instructions."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    region: str
+    threat_code: str
+    items: list[ExternalContextItem]
 
 
 class EnvQueryResponse(Response):
