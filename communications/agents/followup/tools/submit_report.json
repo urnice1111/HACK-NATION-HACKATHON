@@ -1,0 +1,26 @@
+{
+  "type": "webhook",
+  "name": "submit_report",
+  "description": "Guarda la observación que el agricultor confirmó, al terminar la evaluación de una parcela que empeoró.",
+  "response_timeout_secs": 10,
+  "api_schema": {
+    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/submit-report",
+    "method": "POST",
+    "request_headers": {
+      "Authorization": { "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET" }
+    },
+    "request_body_schema": {
+      "type": "object",
+      "required": ["session_id", "user_statement", "completeness"],
+      "properties": {
+        "session_id": { "type": "string", "dynamic_variable": "session_id", "description": "ID de la sesión" },
+        "plot_id": { "type": "string", "dynamic_variable": "plot_id", "description": "ID de la parcela" },
+        "conversation_id": { "type": "string", "dynamic_variable": "system__conversation_id", "description": "ID de la conversación de ElevenLabs" },
+        "user_statement": { "type": "string", "description": "Resumen de lo que el agricultor contó, con sus palabras" },
+        "symptoms": { "type": "array", "items": { "type": "string" }, "description": "Síntomas concretos mencionados" },
+        "completeness": { "type": "string", "enum": ["partial", "sufficient"], "description": "sufficient si la evaluación terminó con orientación; partial en otro caso" },
+        "assessment_id": { "type": "string", "description": "assessment_id de la última respuesta de assess_observation" }
+      }
+    }
+  }
+}
