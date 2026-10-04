@@ -417,6 +417,68 @@ export const ConsentRevoked = z.strictObject({
   is_demo: z.boolean(),
 });
 
+// --- GET /v1/notifications and POST /v1/notifications/{id}/status ---
+
+/**
+ * AGREED (team decision for demo step 6, implemented in parallel by Member 3): an approved
+ * alert queues a voice notification; communications calls with the Alerts agent and reports
+ * each state change. Non-terminal: queued, sending, accepted, unknown. Terminal: delivered,
+ * failed, cancelled (a later update answers `applied: false`). `sending` counts an attempt.
+ */
+export const NotificationStatus = z.enum(["queued", "sending", "accepted", "delivered", "failed", "unknown", "cancelled"]);
+
+export const NotificationListItem = z.strictObject({
+  notification_id: OpaqueId,
+  /** null for notifications that aren't alerts (follow-up or report); the Alerts agent skips them. */
+  alert_id: OpaqueId.nullable(),
+  plot_id: OpaqueId,
+  plot_label: z.string().min(1),
+  farmer_name: z.string().min(1),
+  channel: VoiceOrSms,
+  status: NotificationStatus,
+  attempt_count: z.number().int().min(0),
+  provider_reference: z.string().nullable(),
+  /** Text the reviewer approved; the agent reads it as is. */
+  message: z.string().nullable(),
+  /** Only for the `comms` service token, like the follow-up list. */
+  contact: z.strictObject({
+    phone_e164: PhoneE164,
+    preferred_language: Language,
+    timezone: z.string().min(1),
+    allowed_hours: z.strictObject({ start: z.string(), end: z.string() }).nullable(),
+    notification_consent: z.boolean(),
+  }),
+  created_at: IsoUtc,
+  updated_at: IsoUtc,
+  is_demo: z.boolean(),
+});
+
+export const NotificationList = z.strictObject({
+  schema_version: SchemaVersion,
+  notifications: z.array(NotificationListItem),
+  next_cursor: z.string().nullable(),
+  is_demo: z.boolean(),
+});
+
+export const NotificationStatusUpdate = z.strictObject({
+  schema_version: SchemaVersion,
+  status: z.enum(["sending", "accepted", "delivered", "failed", "unknown", "cancelled"]),
+  provider_reference: z.string().min(1).nullable(),
+  error_code: z.string().min(1).nullable(),
+  occurred_at: IsoUtc,
+  is_demo: z.boolean(),
+});
+
+export const NotificationStatusRecorded = z.strictObject({
+  notification_id: OpaqueId,
+  status: NotificationStatus,
+  attempt_count: z.number().int().min(0),
+  provider_reference: z.string().nullable(),
+  /** false: the notification was already terminal and kept its status. */
+  applied: z.boolean(),
+  is_demo: z.boolean(),
+});
+
 export type ObservationAnswer = z.infer<typeof ObservationAnswer>;
 export type AssessmentRequest = z.infer<typeof AssessmentRequest>;
 export type InformationNeed = z.infer<typeof InformationNeed>;
@@ -442,3 +504,8 @@ export type ConsentRequest = z.infer<typeof ConsentRequest>;
 export type ConsentRecorded = z.infer<typeof ConsentRecorded>;
 export type ConsentRevocationRequest = z.infer<typeof ConsentRevocationRequest>;
 export type ConsentRevoked = z.infer<typeof ConsentRevoked>;
+export type NotificationStatus = z.infer<typeof NotificationStatus>;
+export type NotificationListItem = z.infer<typeof NotificationListItem>;
+export type NotificationList = z.infer<typeof NotificationList>;
+export type NotificationStatusUpdate = z.infer<typeof NotificationStatusUpdate>;
+export type NotificationStatusRecorded = z.infer<typeof NotificationStatusRecorded>;

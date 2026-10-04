@@ -82,7 +82,7 @@ def test_approve_queues_one_notification_and_event(client, db):
     body = resp.json()
     assert body["status"] == "queued"
     assert body["approved_by"] == "operator_demo"
-    assert [(n["channel"], n["status"]) for n in body["notifications"]] == [("sms", "queued")]
+    assert [(n["channel"], n["status"]) for n in body["notifications"]] == [("voice", "queued")]
     events = db.execute("select count(*) from outbox_events where event_type = 'alert.approved' "
                         "and aggregate_id = %s", (alert["alert_id"],)).fetchone()[0]
     assert events == 1

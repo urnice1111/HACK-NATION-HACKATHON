@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from advisor.env import load_dotenv
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
-from backend.app.routes import alerts, contacts, followups, graph, plots, reports, resolutions, assessments, environment
+from backend.app.routes import (alerts, assessments, contacts, environment, followups, graph, notifications, plots,
+                                reports, resolutions)
 
 load_dotenv()
 
@@ -63,6 +64,7 @@ app.include_router(reports.router)
 app.include_router(graph.router)
 app.include_router(alerts.router)
 app.include_router(followups.router)
+app.include_router(notifications.router)
 app.include_router(resolutions.router)
 app.include_router(environment.router)
 app.include_router(assessments.router)

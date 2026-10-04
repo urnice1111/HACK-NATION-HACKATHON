@@ -4,7 +4,7 @@
  *   npm run agents:check   # validates the .env agents and number against what the code expects
  *   npm run agents:pull    # saves a reference copy into agents/ (prompt, voice, tools)
  *
- * Uses ELEVENLABS_API_KEY, ELEVENLABS_HELP_AGENT_ID, ELEVENLABS_FOLLOWUP_AGENT_ID, the numbers
+ * Uses ELEVENLABS_API_KEY, ELEVENLABS_HELP_AGENT_ID, ELEVENLABS_FOLLOWUP_AGENT_ID, ELEVENLABS_ALERT_AGENT_ID, the numbers
  * (HELP_AGENT_TELEPHONE[_ID] and FOLLOW_UP_AGENT_PHONE[_ID], or ELEVENLABS_AGENT_PHONE_NUMBER_ID for a single one)
  * and PUBLIC_BASE_URL. Never prints secrets.
  */
@@ -29,6 +29,7 @@ const api = new ElevenLabsAgentsApi(apiKey);
 const result = await checkAgents(api, {
   helpAgentId: env("ELEVENLABS_HELP_AGENT_ID"),
   followupAgentId: env("ELEVENLABS_FOLLOWUP_AGENT_ID"),
+  alertAgentId: env("ELEVENLABS_ALERT_AGENT_ID"),
   phones: phonesFromEnv(env),
   publicBaseUrl: env("PUBLIC_BASE_URL"),
 });

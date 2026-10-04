@@ -1,0 +1,64 @@
+{
+  "additionalProperties": false,
+  "description": "`delivered` = the farmer confirmed on the call that they heard the alert; never \"read\" or \"acted on\".",
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "sending",
+        "accepted",
+        "delivered",
+        "failed",
+        "unknown",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "provider_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Reference"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "status",
+    "occurred_at",
+    "is_demo"
+  ],
+  "title": "NotificationStatusUpdate",
+  "type": "object"
+}

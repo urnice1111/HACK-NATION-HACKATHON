@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "NotificationStatus": {
+      "enum": [
+        "queued",
+        "sending",
+        "accepted",
+        "delivered",
+        "failed",
+        "unknown",
+        "cancelled"
+      ],
+      "title": "NotificationStatus",
+      "type": "string"
+    }
+  },
+  "description": "`applied: false` = the notification was already terminal; nothing changed.",
+  "properties": {
+    "notification_id": {
+      "title": "Notification Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/NotificationStatus"
+    },
+    "attempt_count": {
+      "title": "Attempt Count",
+      "type": "integer"
+    },
+    "provider_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Provider Reference"
+    },
+    "applied": {
+      "title": "Applied",
+      "type": "boolean"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "notification_id",
+    "status",
+    "attempt_count",
+    "provider_reference",
+    "applied",
+    "is_demo"
+  ],
+  "title": "NotificationStatusRecorded",
+  "type": "object"
+}

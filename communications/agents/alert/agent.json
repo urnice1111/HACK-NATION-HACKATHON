@@ -1,0 +1,23 @@
+{
+  "name": "Coffee Alerts",
+  "language": "en",
+  "llm": "gpt-4.1-nano",
+  "tts": {
+    "model_id": "eleven_v4_turbo",
+    "voice_id": "YOq2y2Up4RgXP2HyXjE5",
+    "expressive_mode": true,
+    "stability": 0.5,
+    "similarity_boost": 0.75
+  },
+  "privacy": {
+    "record_voice": false,
+    "retention_days": 30
+  },
+  "dynamic_variable_placeholders": {
+    "farmer_name": "Rosa",
+    "plot_label": "Plot 1",
+    "alert_message": "Coffee leaf rust was reported on farms near your plot. Check the underside of your leaves for yellow spots or orange powder.",
+    "notification_id": "notification_demo_01",
+    "session_id": "voice_alert_test"
+  }
+}

@@ -12,6 +12,8 @@
  *    save without permission.
  *  - Follow-up (outbound call, section 2.2): `submit_followup` and, if it got worse,
  *    `assess_observation` and `submit_report` with the session and plot the dispatcher set.
+ *  - Alerts (outbound call for an approved alert): `acknowledge_alert`, delegated to the
+ *    alert dispatcher, which owns the notification's state.
  *
  * Shared rules:
  *  - IDs come from dynamic variables; the model never writes them.
@@ -24,6 +26,7 @@
  * authentication and validation return 4xx with the uniform error.
  */
 import { z } from "zod";
+import type { AlertDispatcher } from "../alerts/dispatcher.ts";
 import { reportIdempotencyKey, type BackendClient } from "../backend/client.ts";
 import type { BackendWriter, WriteOutcome } from "../backend/writer.ts";
 import {
@@ -82,6 +85,14 @@ export const SubmitFollowupInput = z.object({
   change_noticed_days_ago: z.number().int().min(0).max(365).nullish().transform((v) => v ?? null),
 });
 
+export const AcknowledgeAlertInput = z.object({
+  session_id: OpaqueId,
+  notification_id: OpaqueId,
+  conversation_id: ConversationId,
+  /** heard: they confirmed they heard the alert. wrong_person: someone else answered (nothing was read). */
+  outcome: z.enum(["heard", "wrong_person"]),
+});
+
 export const ResolveFarmerInput = z.object({
   session_id: OpaqueId,
   /** `system__caller_id`. Hidden or invalid → unidentified number (never guessed). */
@@ -138,6 +149,8 @@ export interface VoiceToolsDeps {
   writer: BackendWriter;
   isDemo: boolean;
   defaultLanguage: string;
+  /** Alert dispatcher; without it `acknowledge_alert` records nothing. */
+  alerts?: AlertDispatcher;
   /** Inactivity after which a help call is considered dropped (and what was described is saved as partial). */
   idleMs?: number;
   now?: () => Date;
@@ -443,6 +456,27 @@ export class VoiceTools {
         : outcome.data.resolution_id !== null
           ? "It's been recorded. Thank them, say you're glad it's resolved and say goodbye."
           : "It's been recorded. Thank them, tell them we'll check in again in a few days and say goodbye.",
+    });
+  }
+
+  /** `acknowledge_alert`: `registered: true` only once the backend confirmed the notification's state. */
+  async acknowledgeAlert(raw: unknown): Promise<ToolReply> {
+    const input = parse(AcknowledgeAlertInput, raw);
+    this.session(input.session_id);
+    const heard = input.outcome === "heard";
+    const after = heard
+      ? "If they say they see symptoms on their own plants, give them the help line. Then say goodbye and end the call."
+      : "Don't read the alert and don't mention any name, plot or detail of it. Apologize for the trouble, say goodbye and end the call.";
+    if (!this.deps.alerts) return ok({ registered: false, instruction: `Do NOT say it was recorded. ${after}` });
+
+    const result = await this.deps.alerts.acknowledge(input);
+    if (result.registered) return ok({ registered: true, instruction: heard ? `It's been recorded that they heard the alert. ${after}` : after });
+    if (result.reason === "closed") {
+      return ok({ registered: false, instruction: `This alert was already closed. Do NOT say it was recorded now and don't call acknowledge_alert again. ${after}` });
+    }
+    return ok({
+      registered: false,
+      instruction: `Do NOT say it was recorded. ${heard ? "Thank them; the system will retry saving it. " : ""}${after}`,
     });
   }
 

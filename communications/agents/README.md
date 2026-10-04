@@ -6,6 +6,7 @@ The agents **live in the ElevenLabs account**: they are created and tuned in the
 | --- | --- | --- | --- |
 | Help (e.g. "Coffee Help") | Inbound calls to the Twilio number | `ELEVENLABS_HELP_AGENT_ID` | [`help/`](help/) |
 | Follow-up (e.g. "Coffee Follow-up") | Outbound calls triggered by `followup.due` | `ELEVENLABS_FOLLOWUP_AGENT_ID` | [`followup/`](followup/) |
+| Alerts (e.g. "Coffee Alerts") | Outbound calls for alerts approved in the dashboard | `ELEVENLABS_ALERT_AGENT_ID` | [`alert/`](alert/) |
 
 ```bash
 npm run agents:check   # reads the agents and the number from the account and reports what's missing or wrong
@@ -14,7 +15,7 @@ npm run agents:pull    # saves a reference copy (prompt, voice, tools) into agen
 
 The server runs the same check at startup: in demo it only logs it; with `IS_DEMO=false` it **won't start** if an agent is misconfigured (if ElevenLabs doesn't respond, it only warns).
 
-What is checked ([`src/elevenlabs/agents.ts`](../src/elevenlabs/agents.ts)): English language; no audio recording; each agent's tools, with the `PUBLIC_BASE_URL` URL, POST method, the `Authorization` header from a secret and only parameters the `/v1/tools/*` routes accept; `session_id` and the IDs come from variables, never from the model; the prompt only uses variables communications sends; the system tool to hang up; and that the number answers with the help agent and allows outbound calls. What can't be read through the API (the secret's value) is checked with a test call.
+What is checked ([`src/elevenlabs/agents.ts`](../src/elevenlabs/agents.ts)): English language; no audio recording; each agent's tools, with the `PUBLIC_BASE_URL` URL, POST method, the `Authorization` header from a secret and only parameters the `/v1/tools/*` routes accept; `session_id` and the IDs come from variables, never from the model; the prompt only uses variables communications sends; the IDs the dispatchers send (`followup_id`, `plot_id`, `notification_id`) also come from variables; the system tool to hang up; and that the help number answers with the help agent and the follow-up number (also used by the Alerts agent) allows outbound calls and doesn't answer with an outbound agent. What can't be read through the API (the secret's value) is checked with a test call.
 
 ## Creating everything from scratch
 
@@ -34,7 +35,7 @@ Before you start: communications deployed with a fixed HTTPS URL (`PUBLIC_BASE_U
 
 ### 3. Tools (Agents → Tools → Add tool → Webhook)
 
-For all of them: **Method** POST; **URL** `<PUBLIC_BASE_URL>` + the path in the table; **Headers**: `Authorization` → *Secret* `comms_tool_secret`; **Body parameters** as in the tables. "Variable" = the parameter is filled from that *dynamic variable* (in the dashboard: *Value type → Dynamic variable*); the model never writes it. The model fills the rest using the description in the reference JSON ([`help/tools/`](help/tools/), [`followup/tools/`](followup/tools/)): copy the tool's name, description and each parameter's description as they are.
+For all of them: **Method** POST; **URL** `<PUBLIC_BASE_URL>` + the path in the table; **Headers**: `Authorization` → *Secret* `comms_tool_secret`; **Body parameters** as in the tables. "Variable" = the parameter is filled from that *dynamic variable* (in the dashboard: *Value type → Dynamic variable*); the model never writes it. The model fills the rest using the description in the reference JSON ([`help/tools/`](help/tools/), [`followup/tools/`](followup/tools/), [`alert/tools/`](alert/tools/)): copy the tool's name, description and each parameter's description as they are.
 
 `assess_observation` and `submit_report` exist twice (once per agent) because `session_id` comes from different variables: create two separate tools.
 
@@ -57,6 +58,12 @@ For all of them: **Method** POST; **URL** `<PUBLIC_BASE_URL>` + the path in the 
 | `assess_observation` | `/v1/tools/assess-observation` | As in help, plus **`plot_id`** ← variable `plot_id` | 15 s |
 | `submit_report` | `/v1/tools/submit-report` | As in help, plus `plot_id` ← variable `plot_id` and `conversation_id` ← variable `system__conversation_id` | 10 s |
 
+**Alerts agent** — `session_id` ← variable `session_id`:
+
+| Tool | Path | Parameters (required in bold) | Timeout |
+| --- | --- | --- | --- |
+| `acknowledge_alert` | `/v1/tools/acknowledge-alert` | **`session_id`**; **`notification_id`** ← variable `notification_id`; `conversation_id` ← variable `system__conversation_id`; **`outcome`** (enum `heard`, `wrong_person`) | 10 s |
+
 ElevenLabs requires a description on every parameter the model fills, including array items.
 
 ### 4. Help agent
@@ -75,7 +82,22 @@ ElevenLabs → **Agents → New agent → Blank**:
 
 Same as the help agent, with [`followup/first_message.txt`](followup/first_message.txt), [`followup/prompt.md`](followup/prompt.md), its three tools and **End call**. Also, under **Dynamic variables**, declare these with test values (the dashboard asks for them to test without a call): `farmer_name`, `threat_label`, `symptoms`, `guidance_given`, `followup_id`, `plot_id`, `session_id`, `attempt_number`. They are the only ones communications sends; the prompt can't use any others. Copy the ID into `ELEVENLABS_FOLLOWUP_AGENT_ID`.
 
-### 6. Check and save the copy
+### 6. Alerts agent
+
+ElevenLabs → **Agents → New agent → Blank**:
+
+1. Name, e.g. "Coffee Alerts".
+2. **Agent**: language *English*; *First message* = [`alert/first_message.txt`](alert/first_message.txt); *System prompt* = [`alert/prompt.md`](alert/prompt.md); the same LLM as the other agents (see [`alert/agent.json`](alert/agent.json)).
+3. **Tools**: `acknowledge_alert` from step 3 ([`alert/tools/acknowledge_alert.json`](alert/tools/acknowledge_alert.json): copy its name, description and the `outcome` description) and the **End call** system tool. No other tools.
+4. **Dynamic variables**: declare `farmer_name`, `plot_label`, `alert_message`, `notification_id` and `session_id` with test values (the ones in `alert/agent.json` work). They are the only ones communications sends; the prompt can't use any others.
+5. **Voice**: the same native English voice and model as the follow-up agent.
+6. **Privacy**: audio recording off; conversation retention 30 days.
+7. Save and copy the ID (`agent_…`) into `ELEVENLABS_ALERT_AGENT_ID`.
+8. **Don't** assign it to any number: it calls from the follow-up number (`FOLLOW_UP_AGENT_PHONE_ID`, or `ELEVENLABS_AGENT_PHONE_NUMBER_ID` with a single number), and inbound calls to that number must keep going to the help agent.
+
+The prompt confirms the farmer's name before reading anything, reads `alert_message` as written, says it doesn't confirm their plot is affected, asks them to confirm they heard it and calls `acknowledge_alert` once; it gives the help line (+1 937 358 8143) if they see symptoms. If someone else answers, it reads nothing and calls `acknowledge_alert` with `wrong_person`.
+
+### 7. Check and save the copy
 
 ```bash
 npm run agents:check   # must end with "Agents ready to use with this code."
@@ -84,7 +106,7 @@ npm run agents:pull    # updates agents/; commit it
 
 End-to-end test: call the number from a phone registered in the backend (help agent) and trigger a `followup.due` (follow-up agent; see below). Only `registered: true` in the tools confirms that the secret and the backend work.
 
-### 7. Production `.env`
+### 8. Production `.env`
 
 | Variable | Value |
 | --- | --- |
@@ -92,11 +114,14 @@ End-to-end test: call the number from a phone registered in the backend (help ag
 | `PUBLIC_BASE_URL` | Fixed HTTPS domain of the deployment (the one used by the tools and the Twilio webhooks). |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Twilio account and number (the one imported into ElevenLabs). |
 | `ELEVENLABS_API_KEY` | With agent and phone number permissions. |
-| `ELEVENLABS_HELP_AGENT_ID`, `ELEVENLABS_FOLLOWUP_AGENT_ID`, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` | Steps 1, 4 and 5. |
+| `ELEVENLABS_HELP_AGENT_ID`, `ELEVENLABS_FOLLOWUP_AGENT_ID`, `ELEVENLABS_ALERT_AGENT_ID` | Steps 4, 5 and 6. |
+| `HELP_AGENT_TELEPHONE_ID`, `FOLLOW_UP_AGENT_PHONE_ID` (or `ELEVENLABS_AGENT_PHONE_NUMBER_ID` for one number) | Step 1. |
 | `ELEVENLABS_TOOL_SECRET` | Step 2. |
 | `COMMS_SERVICE_TOKEN` | Token the backend uses to deliver `followup.due`; share it only with Member 3. |
 | `BACKEND_BASE_URL`, `BACKEND_SERVICE_TOKEN`, `ADVISOR_BASE_URL` | Deployed backend and advisor. |
 | `FOLLOWUP_POLL_INTERVAL_MS` | `30000` while the backend doesn't deliver `followup.due` on its own. |
+| `ALERT_POLL_INTERVAL_MS`, `ALERT_CALL_ATTEMPTS`, `ALERT_CALL_RESULT_TIMEOUT_MS` | Alert calls: polling (15 s), 3 attempts and the wait between them (2 min in demo; longer in production, e.g. 2 h). |
+| `ADVISOR_TIMEOUT_MS` | Cap for the advisor only (10 s); see the main README. |
 
 `DEMO_ALLOWED_NUMBERS`, `DEMO_IGNORE_ALLOWED_HOURS` and `MOCK_*` are demo only.
 
@@ -150,3 +175,21 @@ curl -X POST "http://127.0.0.1:8080/v1/followups/<followup_id>/dispatch" \
 Without ElevenLabs credentials (demo only), the dispatcher uses a stub: it records the attempt and calls nobody.
 
 The `symptoms` and `guidance_given` text comes from the backend: with the real backend it stays in Spanish until Member 3 translates the seeds.
+
+### Alerts agent (demo step 6)
+
+1. A reviewer approves an alert in the dashboard; the backend queues a `voice` notification for the plot's contact.
+2. The alert dispatcher ([`src/alerts/dispatcher.ts`](../src/alerts/dispatcher.ts)) polls `GET /v1/notifications?status=queued&channel=voice` every `ALERT_POLL_INTERVAL_MS` and applies the same rules as the follow-up: alert permission (`notification_consent`), allowed hours and the demo allowlist. No permission → `cancelled` NO_CONSENT; not allowlisted → `cancelled` NOT_ALLOWLISTED; outside hours it waits.
+3. It reports `sending` (the backend counts the attempt), places the call from the follow-up number with these variables and reports `accepted` when ElevenLabs accepts it:
+
+   | Variable | Contents |
+   | --- | --- |
+   | `farmer_name` | Farmer's name (confirmed before reading anything) |
+   | `plot_label` | Plot name |
+   | `alert_message` | Text the reviewer approved, read as is |
+   | `notification_id`, `session_id` | IDs `acknowledge_alert` uses |
+
+4. `acknowledge_alert` with `heard` → `delivered`; with `wrong_person` → `failed` WRONG_PERSON. `registered: true` only after the backend confirms.
+5. No acknowledgement within `ALERT_CALL_RESULT_TIMEOUT_MS` (2 min) → another attempt; after 3 → `failed` NO_ANSWER. An ambiguous ElevenLabs timeout → `unknown`, never redialed.
+
+The `alert_message` text comes from the backend: with the real backend its default message is still in Spanish until Member 3 translates it.

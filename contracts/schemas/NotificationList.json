@@ -1,0 +1,208 @@
+{
+  "$defs": {
+    "AllowedHours": {
+      "properties": {
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "AllowedHours",
+      "type": "object"
+    },
+    "NotificationContact": {
+      "properties": {
+        "phone_e164": {
+          "title": "Phone E164",
+          "type": "string"
+        },
+        "preferred_language": {
+          "title": "Preferred Language",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "allowed_hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AllowedHours"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notification_consent": {
+          "title": "Notification Consent",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "phone_e164",
+        "preferred_language",
+        "timezone",
+        "allowed_hours",
+        "notification_consent"
+      ],
+      "title": "NotificationContact",
+      "type": "object"
+    },
+    "NotificationListItem": {
+      "description": "Queue item for the communications \"Alerts\" voice agent. `message` is the approved alert text.",
+      "properties": {
+        "notification_id": {
+          "title": "Notification Id",
+          "type": "string"
+        },
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        },
+        "plot_id": {
+          "title": "Plot Id",
+          "type": "string"
+        },
+        "plot_label": {
+          "title": "Plot Label",
+          "type": "string"
+        },
+        "farmer_name": {
+          "title": "Farmer Name",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "voice",
+            "sms"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/NotificationStatus"
+        },
+        "attempt_count": {
+          "title": "Attempt Count",
+          "type": "integer"
+        },
+        "provider_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Reference"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Message"
+        },
+        "contact": {
+          "$ref": "#/$defs/NotificationContact"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "notification_id",
+        "alert_id",
+        "plot_id",
+        "plot_label",
+        "farmer_name",
+        "channel",
+        "status",
+        "attempt_count",
+        "provider_reference",
+        "message",
+        "contact",
+        "created_at",
+        "updated_at",
+        "is_demo"
+      ],
+      "title": "NotificationListItem",
+      "type": "object"
+    },
+    "NotificationStatus": {
+      "enum": [
+        "queued",
+        "sending",
+        "accepted",
+        "delivered",
+        "failed",
+        "unknown",
+        "cancelled"
+      ],
+      "title": "NotificationStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "notifications": {
+      "items": {
+        "$ref": "#/$defs/NotificationListItem"
+      },
+      "title": "Notifications",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Cursor"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "notifications",
+    "is_demo"
+  ],
+  "title": "NotificationList",
+  "type": "object"
+}

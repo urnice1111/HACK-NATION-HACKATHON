@@ -45,6 +45,8 @@ export class MockState {
   readonly followups = structuredClone(fixtures.followups);
   readonly resolutions = structuredClone(fixtures.resolutions);
   readonly environment = structuredClone(fixtures.environment);
+  readonly alerts = structuredClone(fixtures.alerts);
+  readonly notifications = structuredClone(fixtures.notifications);
   readonly reports = new Map<string, ReportDetail>();
   /** `scope\0key` → original response and body fingerprint (Idempotency-Key). */
   readonly idempotency = new Map<string, { fingerprint: string; status: number; body: unknown }>();

@@ -46,6 +46,8 @@ const TOOL_ROUTES: Record<string, (tools: VoiceTools, body: unknown) => Promise<
   "/v1/tools/submit-followup": (tools, body) => tools.submitFollowup(body),
   "/v1/tools/assess-observation": (tools, body) => tools.assessObservation(body),
   "/v1/tools/submit-report": (tools, body) => tools.submitReport(body),
+  // Alerts agent (outbound call for an approved alert).
+  "/v1/tools/acknowledge-alert": (tools, body) => tools.acknowledgeAlert(body),
 };
 
 export function createCommsServer(deps: CommsServerDeps): Server {
