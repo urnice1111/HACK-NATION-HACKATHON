@@ -5,6 +5,7 @@ import type { FollowUp } from '../api/types'
 import { Badge } from '../components/Badge'
 import { Panel } from '../components/Panel'
 import { QueryBoundary } from '../components/QueryBoundary'
+import { now } from '../lib/clock'
 import { formatRelative } from '../lib/format'
 import { STATUS_REPORTED } from '../lib/labels'
 
@@ -51,11 +52,11 @@ export function FollowupsPage() {
     <Panel title="Seguimientos" subtitle="Llamadas para saber cómo sigue cada caso" icon={<PhoneCall size={18} />} wide>
       <QueryBoundary query={followups} isEmpty={(d) => d.items.length === 0} empty="No hay seguimientos programados.">
         {(d) => {
-          const now = Date.now()
+          const clock = now()
           return (
             <div className="space-y-5">
               {GROUPS.map((g) => {
-                const items = d.items.filter((f) => g.match(f, now))
+                const items = d.items.filter((f) => g.match(f, clock))
                 if (!items.length) return null
                 return (
                   <section key={g.key}>

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from .catalog import NEED_CATALOG, PROTOCOL_VERSION
+from .catalog import MODEL_SNAPSHOT, NEED_CATALOG, PROTOCOL_VERSION
 from .contracts import (
     AssessmentRequest,
     AssessmentResponse,
@@ -15,7 +15,6 @@ from .contracts import (
     SuspectedIssue,
     Urgency,
 )
-from .openai_adapter import MODEL_SNAPSHOT
 
 
 class MockAssessor:

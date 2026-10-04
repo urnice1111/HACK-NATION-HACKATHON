@@ -1,3 +1,5 @@
+import { now as clockNow } from './clock'
+
 const TZ = 'America/Mexico_City'
 
 const timeFmt = new Intl.DateTimeFormat('es-MX', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
@@ -7,7 +9,7 @@ const rtf = new Intl.RelativeTimeFormat('es-MX', { numeric: 'auto' })
 export const formatTime = (iso: string | number) => timeFmt.format(new Date(iso))
 export const formatDate = (iso: string) => dateFmt.format(new Date(iso))
 
-export function formatRelative(iso: string, now = Date.now()) {
+export function formatRelative(iso: string, now = clockNow()) {
   const diffMin = Math.round((new Date(iso).getTime() - now) / 60_000)
   if (Math.abs(diffMin) < 60) return rtf.format(diffMin, 'minute')
   const diffH = Math.round(diffMin / 60)

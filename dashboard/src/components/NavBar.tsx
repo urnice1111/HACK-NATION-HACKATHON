@@ -4,6 +4,7 @@ import { NavLink } from 'react-router'
 import { useAlerts, useFollowups, useResetDemo } from '../api/hooks'
 import { API_MODE } from '../api'
 import { mockControls } from '../api/mockAdapter'
+import { now } from '../lib/clock'
 
 function Count({ n, tone }: { n: number; tone: 'medium' | 'high' }) {
   if (!n) return null
@@ -19,7 +20,7 @@ export function NavBar() {
 
   const pending = alerts.data?.items.filter((a) => a.status === 'pending_review').length ?? 0
   const overdue =
-    followups.data?.items.filter((f) => f.status === 'scheduled' && new Date(f.due_at).getTime() < Date.now()).length ?? 0
+    followups.data?.items.filter((f) => f.status === 'scheduled' && new Date(f.due_at).getTime() < now()).length ?? 0
 
   const link = ({ isActive }: { isActive: boolean }) =>
     `relative flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[0.6875rem] font-medium transition-colors ${

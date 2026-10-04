@@ -5,6 +5,7 @@ import os
 from fastapi import FastAPI, HTTPException
 
 from .contracts import AssessmentRequest, AssessmentResponse
+from .env import load_dotenv
 from .openai_adapter import AssessmentGenerationError, OpenAIAssessor
 from .mock_assessor import MockAssessor
 
@@ -12,6 +13,7 @@ app = FastAPI(title="Coffee advisor", version="0.1.0")
 
 
 def build_assessor() -> OpenAIAssessor | MockAssessor:
+    load_dotenv()
     return MockAssessor() if os.getenv("ADVISOR_MODE", "openai") == "mock" else OpenAIAssessor()
 
 

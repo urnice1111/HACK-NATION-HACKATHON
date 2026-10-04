@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { FlaskConical, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Outlet, useMatch, useNavigate } from 'react-router'
+import { API_MODE } from '../api'
 import { useGraph } from '../api/hooks'
 import type { GraphResponse, InspectionPriority } from '../api/types'
 import { ConnectionBanner } from '../components/ConnectionBanner'
+import { DemoPlayer } from '../components/DemoPlayer'
 import { Filters } from '../components/Filters'
 import { Legend } from '../components/Legend'
 import { MapView } from '../components/MapView'
@@ -71,8 +73,9 @@ export function AppLayout() {
       )}
 
       {/* Avisos debajo del menú: en el centro quedaban tapados por el panel derecho en pantallas angostas. */}
-      <div className="absolute top-4 left-4 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col items-start gap-2">
+      <div className="absolute top-4 left-4 z-10 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col items-start gap-2">
         <NavBar />
+        {API_MODE === 'mock' && <DemoPlayer />}
         {graph.data?.nodes.some((n) => n.is_demo) && (
           <div role="status" className="flex animate-fade-in items-center gap-2 rounded-full border border-accent/30 bg-panel/85 px-4 py-1.5 text-xs font-medium text-accent shadow-float backdrop-blur-md">
             <FlaskConical size={14} />Modo demo: datos simulados
