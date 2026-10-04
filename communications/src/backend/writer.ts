@@ -4,8 +4,8 @@
  * retried with the SAME key, so the backend returns the original if the first
  * write did happen. The key never changes.
  *
- * Used by the report, the follow-up response, consent, opt-out and follow-up
- * attempts.
+ * Used by the report, the follow-up response, consent, opt-out, follow-up
+ * attempts and notification states.
  */
 import type { BackendClient, BackendResult } from "./client.ts";
 import type {
@@ -17,6 +17,8 @@ import type {
   FollowupAttemptRequest,
   FollowupResponseCreated,
   FollowupResponseRequest,
+  NotificationStatusRecorded,
+  NotificationStatusUpdate,
   ReportCreated,
   ReportRequest,
 } from "../contracts/index.ts";
@@ -63,6 +65,11 @@ export class BackendWriter {
   revokeConsent(body: ConsentRevocationRequest, messageSid: string): Promise<WriteOutcome<ConsentRevoked>> {
     const key = `revocation-${messageSid}`;
     return this.write("consent_revocation", key, () => this.client.revokeConsent(body, key));
+  }
+
+  /** One key per notification state change (e.g. `notification-<id>-attempt-2-accepted`). */
+  updateNotificationStatus(notificationId: string, body: NotificationStatusUpdate, key: string): Promise<WriteOutcome<NotificationStatusRecorded>> {
+    return this.write("notification_status", key, () => this.client.updateNotificationStatus(notificationId, body, key));
   }
 
   /** Background write (doesn't block the reply to the user); `drain()` waits for it too. */

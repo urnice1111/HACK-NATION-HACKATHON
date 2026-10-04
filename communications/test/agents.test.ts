@@ -21,7 +21,7 @@ import {
 } from "../src/elevenlabs/agents.ts";
 
 const PUBLIC = "https://comms.example.test";
-const IDS = { help: "agent_help", followup: "agent_followup", phone: "phnum_test" };
+const IDS = { help: "agent_help", followup: "agent_followup", alert: "agent_alert", phone: "phnum_test" };
 const AGENTS_DIR = new URL("../agents/", import.meta.url);
 
 /** An agent as the API returns it, built from the reference copy in agents/<role>/. */
@@ -52,7 +52,12 @@ function agentFromSnapshot(role: AgentRole): AgentRecord {
 }
 
 function fakeApi(overrides: { agents?: Partial<Record<string, AgentRecord>>; phone?: Partial<PhoneNumberRecord>; down?: boolean } = {}): AgentsApi {
-  const agents: Record<string, AgentRecord> = { [IDS.help]: agentFromSnapshot("help"), [IDS.followup]: agentFromSnapshot("followup"), ...overrides.agents } as Record<string, AgentRecord>;
+  const agents: Record<string, AgentRecord> = {
+    [IDS.help]: agentFromSnapshot("help"),
+    [IDS.followup]: agentFromSnapshot("followup"),
+    [IDS.alert]: agentFromSnapshot("alert"),
+    ...overrides.agents,
+  } as Record<string, AgentRecord>;
   return {
     async getAgent(id) {
       if (overrides.down) throw new AgentsApiError(null, "ElevenLabs did not respond");
@@ -70,6 +75,7 @@ function fakeApi(overrides: { agents?: Partial<Record<string, AgentRecord>>; pho
 const config = {
   helpAgentId: IDS.help,
   followupAgentId: IDS.followup,
+  alertAgentId: IDS.alert,
   phones: phonesFromEnv((name) => ({ ELEVENLABS_AGENT_PHONE_NUMBER_ID: IDS.phone })[name]),
   publicBaseUrl: PUBLIC,
 };
@@ -86,7 +92,7 @@ describe("ElevenLabs agents: check", () => {
     const result = await checkAgents(fakeApi(), config);
     assert.deepEqual(result.problems, []);
     assert.deepEqual(result.unreachable, []);
-    assert.deepEqual(Object.keys(result.agents).sort(), ["followup", "help"]);
+    assert.deepEqual(Object.keys(result.agents).sort(), ["alert", "followup", "help"]);
   });
 
   it("detects misconfigured tools", async () => {
@@ -157,9 +163,36 @@ describe("ElevenLabs agents: check", () => {
     assert.deepEqual((await checkAgents(api, { ...config, phones: phonesFromEnv((name) => env[name]) })).problems, []);
   });
 
+  it("alert agent: acknowledge_alert with its variables, only the variables the dispatcher sends, required ID", async () => {
+    const alert = variant("alert", (agent) => {
+      const tool = agent.conversation_config.agent.prompt.tools!.find((t) => t.name === "acknowledge_alert")!;
+      const properties = tool.api_schema!.request_body_schema!.properties!;
+      properties.notification_id = { type: "string", description: "the notification" };
+      agent.conversation_config.agent.prompt.prompt += "\nThe case is {{case_id}}.";
+    });
+    const text = (await checkAgents(fakeApi({ agents: { [IDS.alert]: alert } }), config)).problems.join("\n");
+    assert.match(text, /alert agent \(Coffee Alerts\): acknowledge_alert: notification_id must come from the dynamic variable notification_id/);
+    assert.match(text, /\{\{case_id\}\}/);
+    assert.doesNotMatch(text, /\{\{alert_message\}\}/, "the dispatcher does send alert_message");
+
+    const missing = await checkAgents(fakeApi(), { ...config, alertAgentId: null });
+    assert.match(missing.problems.join("\n"), /ELEVENLABS_ALERT_AGENT_ID is missing/);
+  });
+
+  it("the outbound number must not answer inbound calls with the alert agent", async () => {
+    const numbers: Record<string, PhoneNumberRecord> = {
+      phnum_help: { phone_number_id: "phnum_help", supports_inbound: true, supports_outbound: true, assigned_agent: { agent_id: IDS.help } },
+      phnum_fu: { phone_number_id: "phnum_fu", supports_inbound: true, supports_outbound: true, assigned_agent: { agent_id: IDS.alert } },
+    };
+    const api: AgentsApi = { getAgent: fakeApi().getAgent, getPhoneNumber: async (id) => numbers[id]! };
+    const phones = phonesFromEnv((name) => ({ HELP_AGENT_TELEPHONE_ID: "phnum_help", FOLLOW_UP_AGENT_PHONE_ID: "phnum_fu" })[name]);
+    const { problems } = await checkAgents(api, { ...config, phones });
+    assert.match(problems.join("\n"), /answers inbound calls with the alert agent/);
+  });
+
   it("ElevenLabs down: not mistaken for a wrong configuration", async () => {
     const result = await checkAgents(fakeApi({ down: true }), config);
-    assert.equal(result.unreachable.length, 2);
+    assert.equal(result.unreachable.length, 3);
     assert.ok(!result.problems.some((p) => p.includes("agent")));
   });
 

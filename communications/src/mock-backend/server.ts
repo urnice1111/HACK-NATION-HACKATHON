@@ -21,6 +21,8 @@ import {
   FollowupAttemptRequest,
   FollowupResponseRequest,
   FollowupStatus,
+  NotificationStatus,
+  NotificationStatusUpdate,
   ReportRequest,
   SCHEMA_VERSION,
   type ConsentRecorded,
@@ -31,6 +33,9 @@ import {
   type FollowupList,
   type FollowupListItem,
   type FollowupResponseCreated,
+  type NotificationList,
+  type NotificationListItem,
+  type NotificationStatusRecorded,
   type PlotContext,
   type ReportCreated,
   type ReportDetail,
@@ -89,6 +94,9 @@ function consentOf(contact: FixtureContact | undefined): ContactConsent {
     consent_at: contact?.consent_at ?? null,
   };
 }
+
+/** A terminal notification keeps its status: later updates answer `applied: false`. */
+const TERMINAL_NOTIFICATION_STATUSES = new Set(["delivered", "failed", "cancelled"]);
 
 /** Follow-ups that still accept a response (a late response to `no_response` is accepted). */
 const OPEN_FOLLOWUP_STATUSES = new Set(["scheduled", "contacting", "no_response"]);
@@ -464,6 +472,93 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     });
   }
 
+  /** AGREED: `GET /v1/notifications?status=…&channel=…&limit=…`, with the alert text and the contact to dial. */
+  function listNotifications(ctx: Ctx): Reply {
+    const statusParam = ctx.query.get("status");
+    const status = statusParam === null ? null : NotificationStatus.safeParse(statusParam);
+    if (status && !status.success) {
+      throw new HttpError(422, "VALIDATION_ERROR", "invalid status", { details: [{ field: "status", reason: "invalid_enum_value" }] });
+    }
+    const channel = ctx.query.get("channel");
+    if (channel !== null && channel !== "voice" && channel !== "sms") {
+      throw new HttpError(422, "VALIDATION_ERROR", "invalid channel", { details: [{ field: "channel", reason: "invalid_enum_value" }] });
+    }
+    const limit = Number(ctx.query.get("limit") ?? 50);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+      throw new HttpError(422, "VALIDATION_ERROR", "invalid limit", { details: [{ field: "limit", reason: "out_of_range" }] });
+    }
+
+    const items: NotificationListItem[] = [];
+    for (const notification of state.notifications) {
+      if (items.length >= limit) break;
+      if (status && notification.status !== status.data) continue;
+      if (channel !== null && notification.channel !== channel) continue;
+      const alert = state.alerts.find((a) => a.id === notification.alert_id);
+      const plot = alert && state.plots.find((p) => p.id === alert.plot_id);
+      const farmer = plot && state.farmerOfPlot(plot.id);
+      const contact = state.contacts.find((c) => c.id === notification.contact_id);
+      if (!alert || !plot || !farmer || !contact) continue;
+      items.push({
+        notification_id: notification.id,
+        alert_id: alert.id,
+        plot_id: plot.id,
+        plot_label: plot.name,
+        farmer_name: farmer.name,
+        channel: notification.channel,
+        status: notification.status,
+        attempt_count: notification.attempt_count,
+        provider_reference: notification.provider_reference,
+        message: alert.message,
+        contact: {
+          phone_e164: contact.phone_e164,
+          preferred_language: farmer.preferred_language,
+          timezone: farmer.timezone,
+          allowed_hours: contact.allowed_hours,
+          // null (never asked) doesn't authorize alerts.
+          notification_consent: contact.notification_consent === true,
+        },
+        created_at: notification.created_at,
+        updated_at: notification.updated_at,
+        is_demo: true,
+      });
+    }
+    const body: NotificationList = { schema_version: SCHEMA_VERSION, notifications: items, next_cursor: null, is_demo: true };
+    return { status: 200, body };
+  }
+
+  /**
+   * AGREED: `POST /v1/notifications/{id}/status`. `sending` counts an attempt; a terminal
+   * notification (delivered, failed, cancelled) keeps its status and answers `applied: false`.
+   */
+  function notificationStatus(ctx: Ctx, notificationId: string, raw: unknown): Reply {
+    const key = requireIdempotencyKey(ctx.req);
+    const body = parseBody(NotificationStatusUpdate, raw);
+    requireDemo(body);
+
+    return idempotent(`POST /v1/notifications/${notificationId}/status`, key, body, () => {
+      const notification = state.notifications.find((n) => n.id === notificationId);
+      if (!notification) throw new HttpError(404, "NOT_FOUND", "Notification not found");
+      const applied = !TERMINAL_NOTIFICATION_STATUSES.has(notification.status);
+      if (applied) {
+        notification.status = body.status;
+        if (body.status === "sending") notification.attempt_count += 1;
+        if (body.provider_reference !== null) notification.provider_reference = body.provider_reference;
+        notification.last_error = body.error_code;
+        notification.updated_at = state.nowIso();
+      }
+      const recorded: NotificationStatusRecorded = {
+        notification_id: notification.id,
+        status: notification.status,
+        attempt_count: notification.attempt_count,
+        provider_reference: notification.provider_reference,
+        applied,
+        is_demo: true,
+      };
+      log("info", "notification_status", { request_id: ctx.requestId, notification_id: notification.id, outcome: applied ? body.status : `ignored:${body.status}` });
+      return { status: 200, body: recorded };
+    });
+  }
+
   /** AGREED: `POST /v1/consents`. Only for the farmer the session confirmed. */
   function recordConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
@@ -527,6 +622,10 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     }
     if (method === "POST" && (m = path.match(/^\/v1\/followups\/([A-Za-z0-9_-]+)\/attempts$/))) {
       return followupAttempt(ctx, m[1]!, await readJson(ctx.req));
+    }
+    if (method === "GET" && path === "/v1/notifications") return listNotifications(ctx);
+    if (method === "POST" && (m = path.match(/^\/v1\/notifications\/([A-Za-z0-9_-]+)\/status$/))) {
+      return notificationStatus(ctx, m[1]!, await readJson(ctx.req));
     }
     if (method === "POST" && path === "/v1/consents") return recordConsent(ctx, await readJson(ctx.req));
     if (method === "POST" && path === "/v1/consents/revocations") return revokeConsent(ctx, await readJson(ctx.req));

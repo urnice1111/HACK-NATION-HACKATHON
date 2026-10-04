@@ -5,7 +5,8 @@
 - One alert per plot + threat + episode. A new episode is a neighbour case opened after the plot's
   last alert (any status, so a rejection is not re-proposed), or the ISO week for environment-only rises.
 - No proposal without notification consent.
-- Approval queues an SMS notification in the same transaction; it never calls Twilio directly.
+- Approval queues a voice notification in the same transaction (delivered by the communications "Alerts"
+  voice agent, section 17); the backend never places the call.
 """
 
 from datetime import UTC, datetime
@@ -131,7 +132,7 @@ def review_alert(conn: Connection, alert_id: str, decision: str, expected_versio
         notification = conn.execute(
             """
             insert into notifications (is_demo, alert_id, contact_id, channel, status)
-            values (%s, %s, %s, 'sms', 'queued')
+            values (%s, %s, %s, 'voice', 'queued')
             returning id
             """,
             (alert["is_demo"], alert_id, contact["id"]),

@@ -21,3 +21,4 @@ include = ["contracts*", "backend*", "advisor*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [".", "advisor/src"]

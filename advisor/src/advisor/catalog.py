@@ -14,6 +14,7 @@ from .contracts import AnswerType, NeedDefinition
 
 THREAT_CODE = "coffee_leaf_rust"
 PROTOCOL_VERSION = "coffee-rust-demo-v1"
+MODEL_SNAPSHOT = "gpt-4.1-mini-2025-04-14"
 
 Language = Literal["en", "es"]
 DEFAULT_LANGUAGE: Language = "en"

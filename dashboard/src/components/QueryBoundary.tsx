@@ -9,8 +9,8 @@ type Props<T> = {
   children: (data: T) => ReactNode
 }
 
-// Estados de carga, error y vacío en un solo lugar. Si hay datos previos y falla
-// la consulta, se siguen mostrando (el aviso global indica que están desactualizados).
+// Loading, error and empty states in one place. If there is earlier data and the query
+// fails, it keeps showing (the global notice says it is out of date).
 export function QueryBoundary<T>({ query, isEmpty, empty, children }: Props<T>) {
   if (query.data !== undefined) {
     if (isEmpty?.(query.data)) {
@@ -25,7 +25,7 @@ export function QueryBoundary<T>({ query, isEmpty, empty, children }: Props<T>) 
   }
   if (query.isPending) {
     return (
-      <div className="space-y-2.5 py-1" aria-busy="true" aria-label="Cargando">
+      <div className="space-y-2.5 py-1" aria-busy="true" aria-label="Loading">
         {[0, 1, 2].map((i) => (
           <div key={i} className="space-y-2 rounded-lg border border-line/60 p-3">
             <div className="h-3.5 w-1/3 animate-pulse rounded bg-panel-2" />
@@ -39,10 +39,10 @@ export function QueryBoundary<T>({ query, isEmpty, empty, children }: Props<T>) 
   return (
     <div role="alert" className="flex flex-col items-center gap-2 py-10 text-center text-sm">
       <span className="grid size-11 place-items-center rounded-full bg-prio-high/10 text-prio-high ring-1 ring-prio-high/30"><AlertTriangle size={20} /></span>
-      <p className="font-medium text-prio-high">No se pudieron cargar los datos.</p>
+      <p className="font-medium text-prio-high">Could not load the data.</p>
       <p className="text-ink-muted">{query.error?.message}</p>
       <button onClick={() => void query.refetch()} className="btn-ghost mt-2">
-        <RefreshCw size={14} />Reintentar
+        <RefreshCw size={14} />Retry
       </button>
     </div>
   )

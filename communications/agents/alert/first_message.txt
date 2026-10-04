@@ -1,0 +1,1 @@
+Hi there, this is the automated assistant for the coffee program. Am I speaking with {{farmer_name}}?

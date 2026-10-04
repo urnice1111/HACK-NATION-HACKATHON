@@ -1,3 +1,4 @@
+import { AlertDispatcher } from "../alerts/dispatcher.ts";
 import { BackendClient } from "../backend/client.ts";
 import { BackendWriter } from "../backend/writer.ts";
 import { loadConfig } from "../config.ts";
@@ -20,6 +21,7 @@ if (config.ELEVENLABS_API_KEY) {
   const check = await checkAgents(new ElevenLabsAgentsApi(config.ELEVENLABS_API_KEY), {
     helpAgentId: config.ELEVENLABS_HELP_AGENT_ID,
     followupAgentId: config.ELEVENLABS_FOLLOWUP_AGENT_ID,
+    alertAgentId: config.ELEVENLABS_ALERT_AGENT_ID,
     phones,
     publicBaseUrl: config.PUBLIC_BASE_URL,
   });
@@ -36,6 +38,7 @@ const client = new BackendClient({
   advisorBaseUrl: config.ADVISOR_BASE_URL,
   serviceToken: config.BACKEND_SERVICE_TOKEN,
   timeoutMs: config.SMS_STEP_TIMEOUT_MS,
+  advisorTimeoutMs: config.ADVISOR_TIMEOUT_MS,
 });
 const writer = new BackendWriter(client, config.REPORT_RETRY_DELAYS_MS);
 const store: SessionStore = new Map();
@@ -84,10 +87,32 @@ const voiceClient = new BackendClient({
   advisorBaseUrl: config.ADVISOR_BASE_URL,
   serviceToken: config.BACKEND_SERVICE_TOKEN,
   timeoutMs: config.BACKEND_TIMEOUT_MS,
+  advisorTimeoutMs: config.ADVISOR_TIMEOUT_MS,
 });
+const voiceWriter = new BackendWriter(voiceClient, config.REPORT_RETRY_DELAYS_MS);
+// Approved alerts: a call with the Alerts agent from the follow-up number. Off without that agent (no stub:
+// a stub would consume real notifications and mark them unanswered).
+const alerts =
+  config.ELEVENLABS_API_KEY && config.ELEVENLABS_ALERT_AGENT_ID && phones.followup.id
+    ? new AlertDispatcher({
+        client: voiceClient,
+        writer: voiceWriter,
+        caller: new ElevenLabsOutboundCaller({
+          apiKey: config.ELEVENLABS_API_KEY,
+          agentId: config.ELEVENLABS_ALERT_AGENT_ID,
+          agentPhoneNumberId: phones.followup.id,
+        }),
+        isDemo: config.IS_DEMO,
+        demoAllowlist: config.DEMO_ALLOWED_NUMBERS,
+        ignoreAllowedHours: config.DEMO_IGNORE_ALLOWED_HOURS,
+        callAttempts: config.ALERT_CALL_ATTEMPTS,
+        callResultTimeoutMs: config.ALERT_CALL_RESULT_TIMEOUT_MS,
+      })
+    : undefined;
 const voiceTools = new VoiceTools({
   client: voiceClient,
-  writer: new BackendWriter(voiceClient, config.REPORT_RETRY_DELAYS_MS),
+  writer: voiceWriter,
+  alerts,
   isDemo: config.IS_DEMO,
   defaultLanguage: config.DEFAULT_LANGUAGE,
   idleMs: config.VOICE_SESSION_IDLE_MS,
@@ -125,6 +150,16 @@ if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
   poller.unref();
 }
 
+if (alerts && config.ALERT_POLL_INTERVAL_MS > 0) {
+  let polling = false;
+  const poller = setInterval(() => {
+    if (polling) return;
+    polling = true;
+    void alerts.poll().finally(() => (polling = false));
+  }, config.ALERT_POLL_INTERVAL_MS);
+  poller.unref();
+}
+
 const sweeper = setInterval(() => {
   void conversation.sweep();
   void voiceTools.sweep();
@@ -143,11 +178,14 @@ server.listen(config.COMMS_PORT, "127.0.0.1", () => {
     sms_webhook: `${config.PUBLIC_BASE_URL}/v1/webhooks/twilio/sms`,
     backend: config.BACKEND_BASE_URL,
     advisor: config.ADVISOR_BASE_URL ?? config.BACKEND_BASE_URL,
+    advisor_timeout_ms: config.ADVISOR_TIMEOUT_MS,
     is_demo: config.IS_DEMO,
     outbound_sms: sender instanceof TwilioSmsSender ? "twilio" : "stub",
     outbound_calls: caller instanceof ElevenLabsOutboundCaller ? "elevenlabs" : "stub",
     voice_tools: config.ELEVENLABS_TOOL_SECRET ? "enabled" : "disabled",
     followup_poll_ms: config.FOLLOWUP_POLL_INTERVAL_MS,
+    alert_calls: alerts ? (config.ALERT_POLL_INTERVAL_MS > 0 ? "polling" : "off (ALERT_POLL_INTERVAL_MS=0)") : "off (needs ELEVENLABS_ALERT_AGENT_ID)",
+    alert_poll_ms: config.ALERT_POLL_INTERVAL_MS,
     demo_ignore_allowed_hours: config.DEMO_IGNORE_ALLOWED_HOURS,
     demo_allowlist_size: config.DEMO_ALLOWED_NUMBERS.size,
   });

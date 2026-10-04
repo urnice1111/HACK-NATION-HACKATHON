@@ -1,6 +1,10 @@
 import os
 from dataclasses import dataclass
 
+from advisor.env import load_dotenv
+
+load_dotenv()
+
 
 @dataclass(frozen=True)
 class Settings:

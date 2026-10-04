@@ -41,6 +41,9 @@ EXPORTED = [
     models.AlertReview,
     models.AlertOut,
     models.AlertList,
+    models.NotificationList,
+    models.NotificationStatusUpdate,
+    models.NotificationStatusRecorded,
     models.RiskModelArtifact,
     models.OutboxEvent,
 ]

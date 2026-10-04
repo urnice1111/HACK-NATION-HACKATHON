@@ -1,0 +1,45 @@
+{
+  "type": "webhook",
+  "name": "acknowledge_alert",
+  "description": "Records whether the farmer heard the alert. Call it only once per call: with outcome heard after the farmer confirms they heard it, or with wrong_person if someone else answered and the alert was not read.",
+  "response_timeout_secs": 10,
+  "api_schema": {
+    "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/acknowledge-alert",
+    "method": "POST",
+    "request_headers": {
+      "Authorization": {
+        "secret_id": "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET"
+      }
+    },
+    "request_body_schema": {
+      "type": "object",
+      "required": [
+        "session_id",
+        "notification_id",
+        "outcome"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "dynamic_variable": "session_id"
+        },
+        "notification_id": {
+          "type": "string",
+          "dynamic_variable": "notification_id"
+        },
+        "conversation_id": {
+          "type": "string",
+          "dynamic_variable": "system__conversation_id"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "heard: the farmer confirmed they heard the alert. wrong_person: someone else answered and the alert was not read",
+          "enum": [
+            "heard",
+            "wrong_person"
+          ]
+        }
+      }
+    }
+  }
+}

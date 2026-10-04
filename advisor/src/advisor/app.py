@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .contracts import AssessmentRequest, AssessmentResponse
 from .openai_adapter import AssessmentGenerationError, OpenAIAssessor
+from .env import load_dotenv
 from .mock_assessor import MockAssessor
 from .anthropic_adapter import AnthropicAssessor
 
@@ -15,6 +16,7 @@ app = FastAPI(title="Coffee advisor", version="0.2.0")
 
 def build_assessor() -> OpenAIAssessor | AnthropicAssessor | MockAssessor:
     """ADVISOR_MODE=mock for a stable answer without a model; ADVISOR_PROVIDER picks openai or anthropic."""
+    load_dotenv()
     if os.getenv("ADVISOR_MODE", "openai") == "mock":
         return MockAssessor()
     return AnthropicAssessor() if os.getenv("ADVISOR_PROVIDER", "openai") == "anthropic" else OpenAIAssessor()
