@@ -70,11 +70,9 @@ export function AppLayout() {
         </div>
       )}
 
-      <div className="absolute top-4 left-4">
+      {/* Avisos debajo del menú: en el centro quedaban tapados por el panel derecho en pantallas angostas. */}
+      <div className="absolute top-4 left-4 flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col items-start gap-2">
         <NavBar />
-      </div>
-
-      <div className="pointer-events-none absolute top-4 right-[32rem] left-[24rem] flex flex-col items-center gap-2 [&>*]:pointer-events-auto">
         {graph.data?.nodes.some((n) => n.is_demo) && (
           <div role="status" className="flex animate-fade-in items-center gap-2 rounded-full border border-accent/30 bg-panel/85 px-4 py-1.5 text-xs font-medium text-accent shadow-float backdrop-blur-md">
             <FlaskConical size={14} />Modo demo: datos simulados
