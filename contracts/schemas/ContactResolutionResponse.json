@@ -1,0 +1,42 @@
+{
+  "$defs": {
+    "ContactCandidate": {
+      "description": "Minimal label only; personal data is released after confirmation.",
+      "properties": {
+        "candidate_token": {
+          "title": "Candidate Token",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_token",
+        "label"
+      ],
+      "title": "ContactCandidate",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/ContactCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "requires_confirmation": {
+      "title": "Requires Confirmation",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "candidates",
+    "requires_confirmation"
+  ],
+  "title": "ContactResolutionResponse",
+  "type": "object"
+}
