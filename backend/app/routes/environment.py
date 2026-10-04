@@ -1,20 +1,29 @@
-"""env_query (INSTRUCTIONS.md 10.2; dueño: integrante 4). Solo lectura sobre el esquema env.
+"""Endpoints del esquema env (INSTRUCTIONS.md sección 10; dueño: integrante 4). Todos de solo lectura.
 
-El asesor manda una especificación estructurada, nunca SQL. Cada variable se valida contra
+env_query: el asesor manda una especificación estructurada, nunca SQL. Cada variable se valida contra
 env.variable_catalog; fuera de cobertura se responde value null y coverage 0, no un error.
 """
 
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from psycopg import Connection
 
 from backend.app.db import get_conn
 from backend.app.errors import ApiError
 from backend.app.graph.engine import haversine_km
-from contracts.models import EnvQueryRequest, EnvQueryResponse, EnvResult, PlotTarget
+from backend.app.routes.plots import environment_summary
+from contracts.models import (
+    EnvCatalogResponse,
+    EnvQueryRequest,
+    EnvQueryResponse,
+    EnvResult,
+    ExternalContextResponse,
+    PlotEnvironmentSummary,
+    PlotTarget,
+)
 
-router = APIRouter(prefix="/v1/environment", tags=["environment"])
+router = APIRouter(prefix="/v1", tags=["environment"])
 
 # Media diagonal de una celda de NASA POWER (0.5° x 0.625°) en la región: más lejos, sin cobertura.
 MAX_CELL_DISTANCE_KM = 45.0
@@ -97,10 +106,66 @@ def resolve_cell(conn: Connection, body: EnvQueryRequest) -> tuple[str | None, f
     return nearest[1], round(nearest[0], 2)
 
 
-@router.post("/query", response_model=EnvQueryResponse)
-def env_query(body: EnvQueryRequest, conn: Connection = Depends(get_conn)):
+def require_env(conn: Connection) -> None:
     if conn.execute("select to_regclass('env.variable_catalog') as t").fetchone()["t"] is None:
         raise ApiError(503, "Datos ambientales no disponibles", retryable=True)
+
+
+@router.get("/environment/catalog", response_model=EnvCatalogResponse)
+def env_catalog(conn: Connection = Depends(get_conn)):
+    """Lo que el asesor puede pedir a env_query; debe ir en su prompt para que no adivine códigos."""
+    require_env(conn)
+    rows = conn.execute(
+        """
+        select variable_code as code, label, unit, description, temporal_resolution,
+               coverage_start, coverage_end, allowed_aggregations, dataset_id
+        from env.variable_catalog order by variable_code
+        """
+    ).fetchall()
+    return EnvCatalogResponse(variables=rows)
+
+
+@router.get("/plots/{plot_id}/environment-summary", response_model=PlotEnvironmentSummary)
+def plot_environment_summary(plot_id: str, conn: Connection = Depends(get_conn)):
+    plot = conn.execute("select is_demo from public.plots where id = %s", (plot_id,)).fetchone()
+    if plot is None:
+        raise ApiError(404, "Parcela no encontrada")
+    summary = environment_summary(conn, plot_id)
+    return PlotEnvironmentSummary(
+        plot_id=plot_id,
+        environment_summary=summary,
+        data_freshness=summary.data_freshness if summary else "unknown",
+        is_demo=plot["is_demo"],
+    )
+
+
+@router.get("/external-context", response_model=ExternalContextResponse)
+def external_context(
+    region: str = Query(min_length=1, max_length=200),
+    threat_code: str = Query(min_length=1, max_length=100),
+    limit: int = Query(default=5, ge=1, le=20),
+    conn: Connection = Depends(get_conn),
+):
+    """Solo contexto revisado y vigente (sección 7.1). Una región sin contexto devuelve items vacío, no 404."""
+    require_env(conn)
+    rows = conn.execute(
+        """
+        select source_id, url, title, retrieved_at, valid_until, region, data_type, content
+        from env.external_context
+        where quality_status = 'reviewed'
+          and (valid_until is null or valid_until > now())
+          and (threat_code is null or threat_code = %(threat)s)
+          and (region is null or region ilike '%%' || %(region)s || '%%' or %(region)s ilike '%%' || region || '%%')
+        order by retrieved_at desc limit %(limit)s
+        """,
+        {"region": region.strip(), "threat": threat_code, "limit": limit},
+    ).fetchall()
+    return ExternalContextResponse(region=region, threat_code=threat_code, items=rows)
+
+
+@router.post("/environment/query", response_model=EnvQueryResponse)
+def env_query(body: EnvQueryRequest, conn: Connection = Depends(get_conn)):
+    require_env(conn)
 
     with conn.transaction():
         conn.execute("set transaction read only")

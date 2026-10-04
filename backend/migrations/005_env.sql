@@ -80,3 +80,6 @@ create table if not exists env.external_context (
   quality_status text not null default 'unreviewed'
     check (quality_status in ('reviewed', 'unreviewed', 'rejected'))
 );
+
+-- null = contexto general de la región, válido para cualquier amenaza.
+alter table env.external_context add column if not exists threat_code text;

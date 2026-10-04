@@ -420,6 +420,57 @@ class EnvResult(Response):
     missing_days: int = Field(ge=0)
 
 
+class EnvCatalogVariable(Response):
+    code: str
+    label: str
+    unit: str
+    description: str
+    temporal_resolution: str
+    coverage_start: date | None
+    coverage_end: date | None
+    allowed_aggregations: list[Aggregation]
+    dataset_id: str
+
+
+class EnvCatalogResponse(Response):
+    """What the advisor may ask env_query for. Anything else is a 422."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    variables: list[EnvCatalogVariable]
+    max_variables_per_query: int = 5
+    max_days_back: int = 365
+
+
+class PlotEnvironmentSummary(Response):
+    """environment_summary is null when the plot has no data (outside coverage); never zeros."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    plot_id: str
+    environment_summary: EnvironmentSummary | None
+    data_freshness: DataFreshness
+    is_demo: bool
+
+
+class ExternalContextItem(Response):
+    source_id: str
+    url: str
+    title: str | None
+    retrieved_at: UtcDatetime
+    valid_until: UtcDatetime | None
+    region: str | None
+    data_type: str | None
+    content: str | None
+
+
+class ExternalContextResponse(Response):
+    """Only reviewed, still-valid context. Content is data for the advisor, never instructions."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    region: str
+    threat_code: str
+    items: list[ExternalContextItem]
+
+
 class EnvQueryResponse(Response):
     query_id: str
     cell_id: str | None

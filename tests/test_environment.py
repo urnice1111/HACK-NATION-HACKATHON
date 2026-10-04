@@ -121,3 +121,48 @@ def test_unknown_plot_is_404(client, env_fixture):
     r = client.post("/v1/environment/query", json=query(
         [{"code": "humidity_pct", "aggregation": "mean"}], target={"plot_id": "nope"}))
     assert r.status_code == 404
+
+
+# --- Catálogo, resumen por parcela y contexto externo ---------------------------------------
+
+
+def test_catalog_lists_codes_units_and_aggregations(client, env_fixture):
+    body = client.get("/v1/environment/catalog").json()
+    variables = {v["code"]: v for v in body["variables"]}
+    assert variables["humidity_pct"]["unit"] == "%"
+    assert "sum" not in variables["humidity_pct"]["allowed_aggregations"]
+    assert body["max_variables_per_query"] == 5
+
+
+def test_environment_summary_without_data_is_null_not_zero(client):
+    body = client.get("/v1/plots/plot_demo_08/environment-summary").json()
+    assert body["environment_summary"] is None and body["data_freshness"] == "unknown"
+    assert client.get("/v1/plots/nope/environment-summary").status_code == 404
+
+
+@pytest.fixture
+def external_rows(db):
+    rows = [
+        ("ctx_test_ok", "reviewed", "Veracruz", "coffee_leaf_rust", "1 day"),
+        ("ctx_test_unreviewed", "unreviewed", "Veracruz", "coffee_leaf_rust", "1 day"),
+        ("ctx_test_expired", "reviewed", "Veracruz", "coffee_leaf_rust", "-1 day"),
+        ("ctx_test_other_threat", "reviewed", "Veracruz", "other_threat", "1 day"),
+        ("ctx_test_other_region", "reviewed", "Chiapas", None, "1 day"),
+    ]
+    for source_id, quality, region, threat, valid in rows:
+        db.execute(
+            "insert into env.external_context (source_id, url, title, valid_until, region, data_type, content, "
+            "quality_status, threat_code) values (%s, 'https://example.org', 't', now() + %s::interval, %s, "
+            "'advisory', 'c', %s, %s) on conflict do nothing",
+            (source_id, valid, region, quality, threat),
+        )
+    db.commit()
+    yield
+    db.execute("delete from env.external_context where source_id like 'ctx_test_%%'")
+    db.commit()
+
+
+def test_external_context_only_reviewed_valid_matching(client, external_rows):
+    r = client.get("/v1/external-context", params={"region": "centro de Veracruz", "threat_code": "coffee_leaf_rust"})
+    assert r.status_code == 200
+    assert [i["source_id"] for i in r.json()["items"]] == ["ctx_test_ok"]

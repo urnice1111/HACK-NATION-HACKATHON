@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "DataUsed": {
+      "properties": {
+        "query_id": {
+          "title": "Query Id",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "data_freshness": {
+          "$ref": "#/$defs/DataFreshness"
+        },
+        "dataset_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Dataset Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_id",
+        "summary",
+        "data_freshness"
+      ],
+      "title": "DataUsed",
+      "type": "object"
+    },
+    "Disposition": {
+      "enum": [
+        "ask_more",
+        "advise",
+        "refer"
+      ],
+      "title": "Disposition",
+      "type": "string"
+    },
+    "EvidenceQuality": {
+      "enum": [
+        "insufficient",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "EvidenceQuality",
+      "type": "string"
+    },
+    "PlotAssessment": {
+      "description": "Dashboard view of a stored assessment: what the advisor looked at and said.",
+      "properties": {
+        "assessment_id": {
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "report_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Report Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "disposition": {
+          "$ref": "#/$defs/Disposition"
+        },
+        "suspected_issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SuspectedIssue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evidence_quality": {
+          "$ref": "#/$defs/EvidenceQuality"
+        },
+        "urgency": {
+          "$ref": "#/$defs/Urgency"
+        },
+        "data_used": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DataUsed"
+          },
+          "title": "Data Used",
+          "type": "array"
+        },
+        "resolved_case_mentions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ResolvedCaseMention"
+          },
+          "title": "Resolved Case Mentions",
+          "type": "array"
+        },
+        "recommendations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Recommendation"
+          },
+          "title": "Recommendations",
+          "type": "array"
+        },
+        "human_review_required": {
+          "title": "Human Review Required",
+          "type": "boolean"
+        },
+        "model_version": {
+          "title": "Model Version",
+          "type": "string"
+        },
+        "protocol_version": {
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "assessment_id",
+        "report_id",
+        "created_at",
+        "disposition",
+        "evidence_quality",
+        "urgency",
+        "human_review_required",
+        "model_version",
+        "protocol_version",
+        "is_demo"
+      ],
+      "title": "PlotAssessment",
+      "type": "object"
+    },
+    "Recommendation": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "protocol_id": {
+          "title": "Protocol Id",
+          "type": "string"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "code",
+        "text",
+        "protocol_id"
+      ],
+      "title": "Recommendation",
+      "type": "object"
+    },
+    "ResolvedCaseMention": {
+      "properties": {
+        "resolution_id": {
+          "title": "Resolution Id",
+          "type": "string"
+        },
+        "summary_for_speech": {
+          "title": "Summary For Speech",
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        }
+      },
+      "required": [
+        "resolution_id",
+        "summary_for_speech",
+        "verification"
+      ],
+      "title": "ResolvedCaseMention",
+      "type": "object"
+    },
+    "SuspectedIssue": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "certainty": {
+          "const": "suspected",
+          "default": "suspected",
+          "title": "Certainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "label"
+      ],
+      "title": "SuspectedIssue",
+      "type": "object"
+    },
+    "Urgency": {
+      "enum": [
+        "unknown",
+        "routine",
+        "soon",
+        "urgent"
+      ],
+      "title": "Urgency",
+      "type": "string"
+    },
+    "Verification": {
+      "enum": [
+        "farmer_reported",
+        "verified",
+        "disputed"
+      ],
+      "title": "Verification",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "assessments": {
+      "items": {
+        "$ref": "#/$defs/PlotAssessment"
+      },
+      "title": "Assessments",
+      "type": "array"
+    }
+  },
+  "required": [
+    "assessments"
+  ],
+  "title": "PlotAssessmentList",
+  "type": "object"
+}

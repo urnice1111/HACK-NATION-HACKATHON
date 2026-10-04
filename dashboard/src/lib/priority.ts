@@ -27,6 +27,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   neighbor_source_exposure: 'Exposición a casos vecinos',
   humidity_mean_14d: 'Humedad media 14 días',
   rain_anomaly_30d: 'Anomalía de lluvia 30 días',
+  temp_optimal_days_14d: 'Días con 21–25 °C (14 días)',
 }
 
 export const hasDirectCase = (s: LocalCaseStatus) => s !== 'none' && s !== 'resolved'

@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "Aggregation": {
+      "enum": [
+        "daily",
+        "weekly",
+        "sum",
+        "mean",
+        "min",
+        "max"
+      ],
+      "title": "Aggregation",
+      "type": "string"
+    },
+    "EnvCatalogVariable": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "temporal_resolution": {
+          "title": "Temporal Resolution",
+          "type": "string"
+        },
+        "coverage_start": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Start"
+        },
+        "coverage_end": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage End"
+        },
+        "allowed_aggregations": {
+          "items": {
+            "$ref": "#/$defs/Aggregation"
+          },
+          "title": "Allowed Aggregations",
+          "type": "array"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "label",
+        "unit",
+        "description",
+        "temporal_resolution",
+        "coverage_start",
+        "coverage_end",
+        "allowed_aggregations",
+        "dataset_id"
+      ],
+      "title": "EnvCatalogVariable",
+      "type": "object"
+    }
+  },
+  "description": "What the advisor may ask env_query for. Anything else is a 422.",
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "variables": {
+      "items": {
+        "$ref": "#/$defs/EnvCatalogVariable"
+      },
+      "title": "Variables",
+      "type": "array"
+    },
+    "max_variables_per_query": {
+      "default": 5,
+      "title": "Max Variables Per Query",
+      "type": "integer"
+    },
+    "max_days_back": {
+      "default": 365,
+      "title": "Max Days Back",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "variables"
+  ],
+  "title": "EnvCatalogResponse",
+  "type": "object"
+}

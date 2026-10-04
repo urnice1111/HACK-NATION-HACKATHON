@@ -1,8 +1,8 @@
 import { ALERT_STATUS, FOLLOWUP_STATUS } from '../lib/labels'
 import { ApiError, type DashboardApi } from './client'
 import type {
-  Alert, AlertReview, AlertStatus, ApiErrorBody, FollowUp, FollowUpStatus, GraphResponse, NotificationStatus, Page,
-  ResolvedCase, TimelineEntry, Verification,
+  Alert, AlertReview, AlertStatus, ApiErrorBody, DataUsed, FollowUp, FollowUpStatus, GraphResponse, NotificationStatus,
+  Page, Recommendation, ResolvedCase, ResolvedMention, TimelineEntry, Verification,
 } from './types'
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000/v1'
@@ -125,6 +125,23 @@ interface ApiReport {
   user_statement: string
 }
 
+interface ApiAssessment {
+  assessment_id: string
+  created_at: string
+  disposition: 'ask_more' | 'advise' | 'refer'
+  suspected_issue: { label: string } | null
+  data_used: DataUsed[]
+  resolved_case_mentions: ResolvedMention[]
+  recommendations: Recommendation[]
+  human_review_required: boolean
+}
+
+const DISPOSITION_TITLE: Record<ApiAssessment['disposition'], string> = {
+  ask_more: 'El asesor pidió más información',
+  advise: 'El asesor dio orientación',
+  refer: 'El asesor derivó a un agrónomo',
+}
+
 function toAlert(a: ApiAlert): Alert {
   // La entrega que importa es la del último intento de notificación.
   const last = a.notifications.at(-1)
@@ -211,12 +228,13 @@ async function getFollowupItems(): Promise<FollowUp[]> {
   return list.followups.map((f) => toFollowup(f, labels))
 }
 
-// No hay endpoint de timeline: se arma con reportes, alertas, seguimientos y resoluciones de la parcela.
-// Las evaluaciones del asesor (datos usados, recomendaciones) aún no tienen endpoint de lectura.
+// No hay endpoint de timeline: se arma con reportes, evaluaciones del asesor, alertas, seguimientos y
+// resoluciones de la parcela.
 async function getTimeline(plotId: string): Promise<Page<TimelineEntry>> {
   const id = encodeURIComponent(plotId)
-  const [graph, alerts, followups, resolutions] = await Promise.all([
+  const [graph, assessments, alerts, followups, resolutions] = await Promise.all([
     getGraph('coffee_leaf_rust'),
+    request<{ assessments: ApiAssessment[] }>(`/plots/${id}/assessments`),
     request<{ alerts: ApiAlert[] }>(`/alerts${qs({ plot_id: plotId })}`),
     request<{ followups: ApiFollowup[] }>('/followups'),
     request<{ resolutions: ApiResolution[] }>(`/resolved-cases?plot_id=${id}`),
@@ -234,6 +252,18 @@ async function getTimeline(plotId: string): Promise<Page<TimelineEntry>> {
       title: r.channel === 'voice' ? 'Reporte por llamada' : 'Reporte por SMS',
       detail: r.user_statement || r.symptoms.join(', ') || null,
       channel: r.channel,
+    })),
+    ...assessments.assessments.map((a): TimelineEntry => ({
+      id: a.assessment_id,
+      kind: 'assessment',
+      occurred_at: a.created_at,
+      title: DISPOSITION_TITLE[a.disposition],
+      detail: a.suspected_issue?.label ?? null,
+      disposition: a.disposition,
+      human_review_required: a.human_review_required,
+      data_used: a.data_used,
+      resolved_case_mentions: a.resolved_case_mentions,
+      recommendations: a.recommendations,
     })),
     ...alerts.alerts.map((a): TimelineEntry => ({
       id: a.alert_id,
