@@ -16,9 +16,9 @@
  *    tiempo a Twilio; el consentimiento se guarda en segundo plano.
  */
 import { randomUUID } from "node:crypto";
-import { consentIdempotencyKey, revocationIdempotencyKey, type BackendClient } from "../backend/client.ts";
+import type { BackendClient } from "../backend/client.ts";
 import type { BackendWriter, WriteOutcome } from "../backend/writer.ts";
-import { SCHEMA_VERSION, type ReportRequest } from "../contracts/index.ts";
+import { MAX_ASSESSMENTS, MAX_QUESTIONS, SCHEMA_VERSION, type ReportRequest } from "../contracts/index.ts";
 import { log, maskPhone } from "../http/log.ts";
 import type { FollowupSmsFlow } from "./followup.ts";
 import {
@@ -34,10 +34,6 @@ import {
 } from "./messages.ts";
 import { isOpen, type AnySession, type ConsentScope, type SessionStore, type SmsSession } from "./session.ts";
 
-/** Evaluaciones antes de cerrar con lo que haya: la inicial + 3 rondas de preguntas (sección 17). */
-const MAX_ASSESSMENT_ROUNDS = 4;
-/** Máximo de preguntas al agricultor por conversación (sección 17). */
-const MAX_QUESTIONS = 5;
 const MAX_INVALID_REPLIES = 3;
 
 export interface InboundSms {
@@ -73,40 +69,32 @@ export class SmsConversation {
     // STOP y similares: Twilio contesta y bloquea; nosotros revocamos para que el backend coincida.
     if (isOptOutKeyword(text)) return this.optOut(msg, false);
 
-    let session: AnySession | undefined = this.deps.store.get(msg.from);
-    if (isOpen(session) && this.isIdle(session)) {
+    const stored = this.deps.store.get(msg.from);
+    let session = isOpen(stored) ? stored : undefined;
+    if (session && this.isIdle(session)) {
       await this.closeIdle(session);
       session = undefined;
     }
+    if (session?.kind === "help") session.last_activity_at = this.now().getTime();
 
-    if (session?.kind === "followup" && isOpen(session)) {
-      if (!text) return msg.num_media > 0 ? sms.textOnly : null;
-      return this.deps.followups.handleReply(session, msg.message_sid, text);
-    }
-
-    const help = session?.kind === "help" && isOpen(session) ? session : undefined;
-    if (!help) {
-      if (!text) return msg.num_media > 0 ? sms.textOnly : null;
-      return this.start(msg, text);
-    }
-
-    help.last_activity_at = this.now().getTime();
     if (!text) return msg.num_media > 0 ? sms.textOnly : null;
+    if (!session) return this.start(msg, text);
+    if (session.kind === "followup") return this.deps.followups.handleReply(session, msg.message_sid, text);
 
-    switch (help.stage.kind) {
+    switch (session.stage.kind) {
       case "identify":
-        return this.onIdentify(help, help.stage.candidates, text);
+        return this.onIdentify(session, session.stage.candidates, text);
       case "choose_plot":
-        return this.onChoosePlot(help, help.stage.plots, text);
+        return this.onChoosePlot(session, session.stage.plots, text);
       case "consent":
-        return this.onConsent(help, help.stage.scope, text);
+        return this.onConsent(session, session.stage.scope, text);
       case "describe":
-        help.statements.push(text);
-        return this.assessAndMaybeFinish(help);
+        session.statements.push(text);
+        return this.assessAndMaybeFinish(session);
       case "answer":
-        help.answers.push(answerFrom(help.stage.need, text));
-        help.statements.push(text);
-        return this.assessAndMaybeFinish(help);
+        session.answers.push(answerFrom(session.stage.need, text));
+        session.statements.push(text);
+        return this.assessAndMaybeFinish(session);
       case "closed":
         return null;
     }
@@ -114,7 +102,7 @@ export class SmsConversation {
 
   /** Cierra conversaciones inactivas: guarda lo recibido como parcial o registra el seguimiento sin respuesta. */
   async sweep(): Promise<void> {
-    for (const session of [...this.deps.store.all()]) {
+    for (const session of [...this.deps.store.values()]) {
       if (isOpen(session) && this.isIdle(session)) await this.closeIdle(session);
     }
   }
@@ -139,8 +127,7 @@ export class SmsConversation {
         provider_reference: msg.message_sid,
         is_demo: this.deps.isDemo,
       },
-      revocationIdempotencyKey(msg.message_sid),
-      `optout_${msg.message_sid}`,
+      msg.message_sid,
     );
     log("info", "sms_opt_out", { phone: maskPhone(msg.from), outcome: outcome.status, keyword: reply ? "baja" : "stop" });
     if (!reply) return null;
@@ -156,7 +143,6 @@ export class SmsConversation {
       session_id: `sms_${randomUUID()}`,
       phone_e164: msg.from,
       first_message_sid: msg.message_sid,
-      created_at: this.now().toISOString(),
       last_activity_at: this.now().getTime(),
       stage: { kind: "consent", scope: "reports" },
       invalid_replies: 0,
@@ -190,20 +176,18 @@ export class SmsConversation {
       phone: maskPhone(msg.from),
       outcome: resolved.data.resolution_status,
     });
-    this.deps.store.set(session);
+    this.deps.store.set(session.phone_e164, session);
 
     const candidates = resolved.data.candidates;
-    if (candidates.length === 0) {
-      return `${sms.unknownNumber} ${sms.consent}`;
-    }
+    if (candidates.length === 0) return `${sms.unknownNumber} ${sms.consent}`;
     session.stage = { kind: "identify", candidates };
-    return candidates.length === 1 ? sms.identifyOne(candidates[0]!.label) : sms.identifyMany(candidates.map((c) => c.label));
+    return sms.identify(candidates.map((c) => c.label));
   }
 
   private async onIdentify(session: SmsSession, candidates: { candidate_token: string; label: string }[], text: string): Promise<string> {
     let choice = parseChoice(text, candidates.length);
     if (choice === null && candidates.length === 1 && parseYesNo(text) === true) choice = 0;
-    if (choice === null) return this.reAsk(session, candidates.length === 1 ? sms.identifyOne(candidates[0]!.label) : sms.identifyMany(candidates.map((c) => c.label)));
+    if (choice === null) return this.reAsk(session, sms.identify(candidates.map((c) => c.label)));
     session.invalid_replies = 0;
 
     if (choice === "none") {
@@ -313,20 +297,17 @@ export class SmsConversation {
     const { notifications, followup_calls } = session.consent;
     if (reports === null && notifications === null && followup_calls === null) return;
     this.deps.writer.track(
-      this.deps.writer.recordConsent(
-        {
-          schema_version: SCHEMA_VERSION,
-          session_id: session.session_id,
-          farmer_id: session.farmer.farmer_id,
-          channel: "sms",
-          reports,
-          notifications,
-          followup_calls,
-          provider_reference: session.first_message_sid,
-          is_demo: this.deps.isDemo,
-        },
-        consentIdempotencyKey(session.session_id),
-      ),
+      this.deps.writer.recordConsent({
+        schema_version: SCHEMA_VERSION,
+        session_id: session.session_id,
+        farmer_id: session.farmer.farmer_id,
+        channel: "sms",
+        reports,
+        notifications,
+        followup_calls,
+        provider_reference: session.first_message_sid,
+        is_demo: this.deps.isDemo,
+      }),
     );
   }
 
@@ -338,7 +319,7 @@ export class SmsConversation {
       const outcome = await this.finish(session, "partial");
       return closingText(outcome, sms.savedUnknown);
     }
-    if (session.assessment_rounds >= MAX_ASSESSMENT_ROUNDS) {
+    if (session.assessment_rounds >= MAX_ASSESSMENTS) {
       return closingText(await this.finish(session, "partial"));
     }
 

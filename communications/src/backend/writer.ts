@@ -46,20 +46,22 @@ export class BackendWriter {
     return this.write("report", body.session_id, () => this.client.submitReport(body, key));
   }
 
-  submitFollowup(followupId: string, body: FollowupResponseRequest, key: string): Promise<WriteOutcome<FollowupResponseCreated>> {
-    return this.write("followup_response", body.session_id, () => this.client.submitFollowupResponse(followupId, body, key));
+  submitFollowup(followupId: string, body: FollowupResponseRequest): Promise<WriteOutcome<FollowupResponseCreated>> {
+    return this.write("followup_response", body.session_id, () => this.client.submitFollowupResponse(followupId, body));
   }
 
-  recordFollowupAttempt(followupId: string, body: FollowupAttemptRequest, key: string): Promise<WriteOutcome<FollowupAttemptRecorded>> {
-    return this.write("followup_attempt", body.session_id, () => this.client.recordFollowupAttempt(followupId, body, key));
+  recordFollowupAttempt(followupId: string, body: FollowupAttemptRequest): Promise<WriteOutcome<FollowupAttemptRecorded>> {
+    return this.write("followup_attempt", body.session_id, () => this.client.recordFollowupAttempt(followupId, body));
   }
 
-  recordConsent(body: ConsentRequest, key: string): Promise<WriteOutcome<ConsentRecorded>> {
-    return this.write("consent", body.session_id, () => this.client.recordConsent(body, key));
+  recordConsent(body: ConsentRequest): Promise<WriteOutcome<ConsentRecorded>> {
+    return this.write("consent", body.session_id, () => this.client.recordConsent(body));
   }
 
-  revokeConsent(body: ConsentRevocationRequest, key: string, correlationId: string): Promise<WriteOutcome<ConsentRevoked>> {
-    return this.write("consent_revocation", correlationId, () => this.client.revokeConsent(body, key));
+  /** La baja se deduplica por el MessageSid del SMS que la pidió. */
+  revokeConsent(body: ConsentRevocationRequest, messageSid: string): Promise<WriteOutcome<ConsentRevoked>> {
+    const key = `revocation-${messageSid}`;
+    return this.write("consent_revocation", key, () => this.client.revokeConsent(body, key));
   }
 
   /** Escritura en segundo plano (no bloquea la respuesta al usuario); `drain()` también la espera. */
@@ -107,7 +109,6 @@ export class BackendWriter {
         resolve();
       }, delay);
     });
-    this.inFlight.add(retry);
-    void retry.then(() => this.inFlight.delete(retry));
+    this.track(retry);
   }
 }

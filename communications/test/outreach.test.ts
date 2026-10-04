@@ -38,3 +38,29 @@ describe("canContact", () => {
     assert.deepEqual(canContact({ ...base, isDemo: false, demoAllowlist: new Set() }), { ok: true });
   });
 });
+
+describe("DEMO_IGNORE_ALLOWED_HOURS", () => {
+  const night = {
+    phone_e164: "+12025550105",
+    timezone: TZ,
+    allowed_hours: null,
+    consent: true,
+    now: new Date("2026-10-04T04:00:00Z"), // 22:00 en México
+    isDemo: true,
+    demoAllowlist: new Set(["+12025550105"]),
+  };
+
+  it("en demo se salta el horario", () => {
+    assert.deepEqual(canContact(night), { ok: false, reason: "outside_hours" });
+    assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true }), { ok: true });
+  });
+
+  it("no se salta el consentimiento ni la lista blanca", () => {
+    assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true, consent: false }), { ok: false, reason: "no_consent" });
+    assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true, demoAllowlist: new Set() }), { ok: false, reason: "not_allowlisted" });
+  });
+
+  it("fuera de demo no tiene efecto aunque llegue en true", () => {
+    assert.deepEqual(canContact({ ...night, isDemo: false, ignoreAllowedHours: true }), { ok: false, reason: "outside_hours" });
+  });
+});

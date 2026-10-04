@@ -19,14 +19,14 @@
  * sondeo de `GET /v1/followups`; ambos caminos terminan en `dispatch()`.
  */
 import { randomUUID } from "node:crypto";
-import { followupAttemptIdempotencyKey, type BackendClient } from "../backend/client.ts";
+import type { BackendClient } from "../backend/client.ts";
 import type { BackendWriter } from "../backend/writer.ts";
 import { SCHEMA_VERSION, type FollowupListItem } from "../contracts/index.ts";
 import type { DynamicVariables, OutboundCaller } from "../elevenlabs/outbound.ts";
 import { log, maskPhone } from "../http/log.ts";
 import { canContact } from "../policy/outreach.ts";
 import type { FollowupSmsFlow, FollowupStartResult } from "../sms/followup.ts";
-import { KeyedMutex } from "../sms/session.ts";
+import { KeyedMutex } from "../util.ts";
 
 /** Nombre hablado de cada amenaza; el `threat_code` no se le dice al agricultor. */
 const THREAT_LABELS: Record<string, string> = { coffee_leaf_rust: "roya del café" };
@@ -49,6 +49,8 @@ export interface DispatcherDeps {
   followupSms: FollowupSmsFlow;
   isDemo: boolean;
   demoAllowlist: ReadonlySet<string>;
+  /** DEMO_IGNORE_ALLOWED_HOURS (solo demo). */
+  ignoreAllowedHours?: boolean;
   /** Intentos de llamada antes del SMS (3 en la sección 17). */
   callAttempts: number;
   /** Cuánto esperar `submit_followup` tras colocar la llamada antes de registrar `no_response`. */
@@ -64,15 +66,11 @@ interface PendingCall {
   placed_at: number;
 }
 
-export function threatLabel(code: string): string {
-  return THREAT_LABELS[code] ?? "el problema que reportó";
-}
-
 /** Variables dinámicas del agente de seguimiento. Sin teléfono ni coordenadas: el modelo las ve. */
 export function followupVariables(item: FollowupListItem, sessionId: string): DynamicVariables {
   return {
     farmer_name: item.case_summary.farmer_name,
-    threat_label: threatLabel(item.case_summary.threat_code),
+    threat_label: THREAT_LABELS[item.case_summary.threat_code] ?? "el problema que reportó",
     symptoms: item.case_summary.symptoms.length > 0 ? item.case_summary.symptoms.join(", ") : "sin detalle",
     guidance_given: item.case_summary.guidance_given ?? "ninguna",
     followup_id: item.followup_id,
@@ -135,13 +133,7 @@ export class FollowupDispatcher {
     for (const call of expired) {
       this.pending.delete(call.followup_id);
       if (!stillOpen.has(call.followup_id)) continue; // respondió (o el backend lo cerró)
-      this.deps.writer.track(
-        this.deps.writer.recordFollowupAttempt(
-          call.followup_id,
-          this.attemptBody(call.session_id, "no_response", null),
-          followupAttemptIdempotencyKey(call.followup_id, call.session_id, "no_response"),
-        ),
-      );
+      this.deps.writer.track(this.recordAttempt(call.followup_id, call.session_id, "no_response", null));
       log("info", "followup_call_no_response", { correlation_id: call.session_id, followup_id: call.followup_id });
     }
   }
@@ -162,6 +154,7 @@ export class FollowupDispatcher {
       now: this.now(),
       isDemo: this.deps.isDemo,
       demoAllowlist: this.deps.demoAllowlist,
+      ignoreAllowedHours: this.deps.ignoreAllowedHours,
     });
     if (!decision.ok) {
       const result: DispatchResult =
@@ -190,24 +183,14 @@ export class FollowupDispatcher {
         return this.done({ status: "deferred", reason: "provider_backoff" }, { ...fields, code: placed.code });
       }
       this.backoff.delete(item.followup_id);
-      this.deps.writer.track(
-        this.deps.writer.recordFollowupAttempt(
-          item.followup_id,
-          this.attemptBody(sessionId, "failed", null),
-          followupAttemptIdempotencyKey(item.followup_id, sessionId, "failed"),
-        ),
-      );
+      this.deps.writer.track(this.recordAttempt(item.followup_id, sessionId, "failed", null));
       return this.done({ status: "failed", reason: "provider_rejected", code: placed.code }, fields);
     }
     this.backoff.delete(item.followup_id);
 
     // Colocada o ambigua: la llamada pudo salir, así que la sesión debe poder guardar.
     const reference = placed.ok ? (placed.conversation_id ?? placed.call_sid) : null;
-    const attempt = await this.deps.writer.recordFollowupAttempt(
-      item.followup_id,
-      this.attemptBody(sessionId, "contacting", reference),
-      followupAttemptIdempotencyKey(item.followup_id, sessionId, "contacting"),
-    );
+    const attempt = await this.recordAttempt(item.followup_id, sessionId, "contacting", reference);
     if (attempt.status === "failed") log("error", "followup_call_attempt_not_recorded", { ...fields, correlation_id: sessionId, code: attempt.code });
     this.pending.set(item.followup_id, { followup_id: item.followup_id, session_id: sessionId, placed_at: this.now().getTime() });
 
@@ -218,16 +201,16 @@ export class FollowupDispatcher {
     );
   }
 
-  private attemptBody(sessionId: string, status: "contacting" | "no_response" | "failed", reference: string | null) {
-    return {
+  private recordAttempt(followupId: string, sessionId: string, status: "contacting" | "no_response" | "failed", reference: string | null) {
+    return this.deps.writer.recordFollowupAttempt(followupId, {
       schema_version: SCHEMA_VERSION,
       session_id: sessionId,
       status,
-      channel: "voice" as const,
+      channel: "voice",
       call_reference: reference,
       occurred_at: this.now().toISOString(),
       is_demo: this.deps.isDemo,
-    };
+    });
   }
 
   private done(result: DispatchResult, fields: Record<string, unknown>): DispatchResult {

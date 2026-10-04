@@ -13,9 +13,9 @@
  *  - Solo se dice "quedó registrado" tras un 201.
  */
 import { randomUUID } from "node:crypto";
-import { followupAttemptIdempotencyKey, followupIdempotencyKey, type BackendClient } from "../backend/client.ts";
+import type { BackendClient } from "../backend/client.ts";
 import type { BackendWriter, WriteOutcome } from "../backend/writer.ts";
-import { SCHEMA_VERSION, type FollowupListItem, type FollowupResponseCreated } from "../contracts/index.ts";
+import { SCHEMA_VERSION, type FollowupAttemptRequest, type FollowupListItem, type FollowupResponseCreated } from "../contracts/index.ts";
 import { log, maskPhone } from "../http/log.ts";
 import { canContact } from "../policy/outreach.ts";
 import type { SmsSender } from "../twilio/sender.ts";
@@ -32,6 +32,8 @@ export interface FollowupFlowDeps {
   sender: SmsSender;
   isDemo: boolean;
   demoAllowlist: ReadonlySet<string>;
+  /** DEMO_IGNORE_ALLOWED_HOURS (solo demo). */
+  ignoreAllowedHours?: boolean;
   /** Cuánto esperamos la respuesta antes de registrar `no_response`. */
   replyWindowMs: number;
   now?: () => Date;
@@ -63,25 +65,14 @@ export class FollowupSmsFlow {
       now: this.now(),
       isDemo: this.deps.isDemo,
       demoAllowlist: this.deps.demoAllowlist,
+      ignoreAllowedHours: this.deps.ignoreAllowedHours,
     });
     if (!decision.ok) return this.skip(decision.reason, correlation);
     // No se pisa una conversación en curso; el despachador lo reintentará.
     if (isOpen(this.deps.store.get(phone))) return this.skip("busy", correlation);
 
     const sessionId = `sms_fu_${randomUUID()}`;
-    const attempt = await this.deps.client.recordFollowupAttempt(
-      item.followup_id,
-      {
-        schema_version: SCHEMA_VERSION,
-        session_id: sessionId,
-        status: "contacting",
-        channel: "sms",
-        call_reference: null,
-        occurred_at: this.now().toISOString(),
-        is_demo: this.deps.isDemo,
-      },
-      followupAttemptIdempotencyKey(item.followup_id, sessionId, "contacting"),
-    );
+    const attempt = await this.deps.client.recordFollowupAttempt(item.followup_id, this.attemptBody(sessionId, "contacting"));
     if (!attempt.ok) {
       log("warn", "followup_sms_attempt_failed", { ...correlation, correlation_id: sessionId, code: attempt.code });
       return { status: "failed", reason: "backend_error", code: attempt.code };
@@ -101,7 +92,6 @@ export class FollowupSmsFlow {
       followup_id: item.followup_id,
       outbound_reference: sent.ok ? sent.provider_reference : null,
       first_reply_sid: null,
-      created_at: this.now().toISOString(),
       last_activity_at: this.now().getTime(),
       stage: "status",
       invalid_replies: 0,
@@ -112,7 +102,7 @@ export class FollowupSmsFlow {
       submitted: false,
     };
     // También tras un envío ambiguo: si el SMS sí salió, la respuesta debe encontrar su sesión.
-    this.deps.store.set(session);
+    this.deps.store.set(phone, session);
 
     if (!sent.ok) {
       log("warn", "followup_sms_ambiguous", { ...correlation, correlation_id: sessionId, code: sent.code });
@@ -176,22 +166,18 @@ export class FollowupSmsFlow {
   private async finish(session: FollowupSmsSession): Promise<WriteOutcome<FollowupResponseCreated>> {
     session.stage = "closed";
     session.submitted = true;
-    const outcome = await this.deps.writer.submitFollowup(
-      session.followup_id,
-      {
-        schema_version: SCHEMA_VERSION,
-        session_id: session.session_id,
-        channel: "sms",
-        status_reported: session.status_reported ?? "unknown",
-        user_statement: session.statements.join("\n"),
-        actions_taken: session.actions_taken,
-        action_worked: session.action_worked ?? "unknown",
-        change_noticed_at: null,
-        provider_reference: session.first_reply_sid ?? session.outbound_reference,
-        is_demo: this.deps.isDemo,
-      },
-      followupIdempotencyKey(session.followup_id, session.session_id),
-    );
+    const outcome = await this.deps.writer.submitFollowup(session.followup_id, {
+      schema_version: SCHEMA_VERSION,
+      session_id: session.session_id,
+      channel: "sms",
+      status_reported: session.status_reported ?? "unknown",
+      user_statement: session.statements.join("\n"),
+      actions_taken: session.actions_taken,
+      action_worked: session.action_worked ?? "unknown",
+      change_noticed_at: null,
+      provider_reference: session.first_reply_sid ?? session.outbound_reference,
+      is_demo: this.deps.isDemo,
+    });
     log("info", "followup_sms_submitted", {
       correlation_id: session.session_id,
       followup_id: session.followup_id,
@@ -208,22 +194,21 @@ export class FollowupSmsFlow {
     return replyFor(session, await this.finish(session));
   }
 
+  /** En segundo plano: no bloquea la respuesta y se reintenta con la misma clave. */
   private recordAttempt(followupId: string, sessionId: string, status: "no_response" | "failed"): void {
-    this.deps.writer.track(
-      this.deps.writer.recordFollowupAttempt(
-        followupId,
-        {
-          schema_version: SCHEMA_VERSION,
-          session_id: sessionId,
-          status,
-          channel: "sms",
-          call_reference: null,
-          occurred_at: this.now().toISOString(),
-          is_demo: this.deps.isDemo,
-        },
-        followupAttemptIdempotencyKey(followupId, sessionId, status),
-      ),
-    );
+    this.deps.writer.track(this.deps.writer.recordFollowupAttempt(followupId, this.attemptBody(sessionId, status)));
+  }
+
+  private attemptBody(sessionId: string, status: FollowupAttemptRequest["status"]): FollowupAttemptRequest {
+    return {
+      schema_version: SCHEMA_VERSION,
+      session_id: sessionId,
+      status,
+      channel: "sms",
+      call_reference: null,
+      occurred_at: this.now().toISOString(),
+      is_demo: this.deps.isDemo,
+    };
   }
 
   private skip(reason: Extract<FollowupStartResult, { status: "skipped" }>["reason"], fields: Record<string, unknown>): FollowupStartResult {

@@ -423,7 +423,6 @@ export type InformationNeed = z.infer<typeof InformationNeed>;
 export type DataUsed = z.infer<typeof DataUsed>;
 export type ResolvedCaseMention = z.infer<typeof ResolvedCaseMention>;
 export type AssessmentResponse = z.infer<typeof AssessmentResponse>;
-export type Recommendation = z.infer<typeof Recommendation>;
 export type ReportRequest = z.infer<typeof ReportRequest>;
 export type ReportCreated = z.infer<typeof ReportCreated>;
 export type ReportDetail = z.infer<typeof ReportDetail>;

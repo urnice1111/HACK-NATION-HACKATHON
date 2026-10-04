@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { z } from "zod";
 import type { ErrorBody, ErrorDetail } from "../contracts/index.ts";
 
 const MAX_BODY_BYTES = 256 * 1024;
@@ -87,4 +88,31 @@ export function bearerMatches(header: string | null, expected: string): boolean 
   const given = Buffer.from(header.slice("Bearer ".length));
   const wanted = Buffer.from(expected);
   return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
+/** Valida un cuerpo contra su esquema; si no cumple, 422 con `details[]` del error uniforme. */
+export function parseBody<T extends z.ZodType>(schema: T, raw: unknown, message = "El cuerpo no cumple el contrato v2"): z.infer<T> {
+  const result = schema.safeParse(raw);
+  if (!result.success) throw new HttpError(422, "VALIDATION_ERROR", message, { details: validationDetails(result.error) });
+  return result.data;
+}
+
+/**
+ * Errores de zod → `details[]`, con rutas tipo `measurements[0].unit` (sección 8).
+ * Nunca incluye el valor recibido: podría ser un teléfono o parte de una transcripción.
+ */
+function validationDetails(error: z.ZodError): ErrorDetail[] {
+  return error.issues.flatMap((issue) => {
+    if (issue.code === "unrecognized_keys") {
+      return issue.keys.map((key) => ({ field: formatPath([...issue.path, key]), reason: "unrecognized" }));
+    }
+    const missing = issue.code === "invalid_type" && /received undefined/.test(issue.message);
+    return [{ field: formatPath(issue.path), reason: missing ? "required" : issue.code }];
+  });
+}
+
+function formatPath(path: ReadonlyArray<PropertyKey>): string {
+  let out = "";
+  for (const segment of path) out += typeof segment === "number" ? `[${segment}]` : out ? `.${String(segment)}` : String(segment);
+  return out || "(body)";
 }

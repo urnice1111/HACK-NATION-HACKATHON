@@ -13,7 +13,7 @@ import { HttpError, bearerMatches, headerValue, readBody, readJson, requestIdFro
 import type { ToolReply, VoiceTools } from "../tools/voice-tools.ts";
 import { normalizeE164 } from "../phone.ts";
 import type { SmsConversation } from "../sms/conversation.ts";
-import { KeyedMutex, ProcessedMessages } from "../sms/session.ts";
+import { BoundedMap, KeyedMutex } from "../util.ts";
 import { callbackUrl, formParams, isValidTwilioSignature, messageTwiml } from "../twilio/webhook.ts";
 
 export interface CommsServerDeps {
@@ -42,9 +42,10 @@ const TOOL_ROUTES: Record<string, (tools: VoiceTools, body: unknown) => Promise<
 
 export function createCommsServer(deps: CommsServerDeps): Server {
   const phoneLocks = new KeyedMutex();
-  const processed = new ProcessedMessages();
+  /** TwiML ya contestado por MessageSid: un webhook repetido recibe la misma respuesta. */
+  const processed = new BoundedMap<string, string>();
   /** Eventos ya procesados (sección 11: cada consumidor deduplica por event_id). */
-  const processedEvents = new Map<string, DispatchResult>();
+  const processedEvents = new BoundedMap<string, DispatchResult>();
 
   async function tool(req: IncomingMessage, res: ServerResponse, requestId: string, path: string): Promise<string> {
     if (!deps.voiceTools || !deps.toolSecret) throw new HttpError(503, "NOT_CONFIGURED", "Herramientas de voz no configuradas");
@@ -75,7 +76,6 @@ export function createCommsServer(deps: CommsServerDeps): Server {
     }
     const result = await deps.dispatcher.dispatchById(followupId);
     processedEvents.set(event.event_id, result);
-    if (processedEvents.size > 5000) processedEvents.delete(processedEvents.keys().next().value!);
     sendJson(res, 202, { event_id: event.event_id, followup_id: followupId, result, replayed: false }, { "X-Request-Id": requestId });
     return result.status;
   }
@@ -113,7 +113,7 @@ export function createCommsServer(deps: CommsServerDeps): Server {
         num_media: Number(params.NumMedia ?? 0),
       });
       const fresh = messageTwiml(reply);
-      processed.remember(messageSid, fresh);
+      processed.set(messageSid, fresh);
       return { twiml: fresh, replayed: false };
     });
 

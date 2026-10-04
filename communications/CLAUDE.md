@@ -6,7 +6,7 @@ Este archivo guía a Claude Code (claude.ai/code) cuando trabaja en este reposit
 
 Eres el agente del **Integrante 1: comunicaciones** del MVP agrícola por voz y SMS. Tu dueño es el módulo `communications/`: adaptadores Twilio/ElevenLabs, sesiones, entrega de mensajes y seguimiento telefónico.
 
-El documento fuente de la verdad es `delegacion_mvp_agricultura.md` **v2.0** (secciones 2.1, 2.2, 4, 8, 10, 11, 12, 15 y 17 son las tuyas). Si este archivo y ese documento se contradicen, gana el documento; avisa al usuario de la discrepancia.
+El documento fuente de la verdad es `INSTRUCTIONS.md` **v2.0**, en la raíz del repositorio (secciones 2.1, 2.2, 4, 8, 10, 11, 12, 15 y 17 son las tuyas). Si este archivo y ese documento se contradicen, gana el documento; avisa al usuario de la discrepancia.
 
 > Discrepancia conocida: la sección 17 dice "integrante 3 = usuario de este repositorio". El usuario de este módulo es el **Integrante 1**; está pendiente de corregir en el documento del equipo.
 

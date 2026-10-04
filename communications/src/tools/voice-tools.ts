@@ -14,24 +14,23 @@
  * lea; solo autenticación y validación devuelven 4xx con el error uniforme.
  */
 import { z } from "zod";
-import { followupIdempotencyKey, reportIdempotencyKey, type BackendClient } from "../backend/client.ts";
+import { reportIdempotencyKey, type BackendClient } from "../backend/client.ts";
 import type { BackendWriter } from "../backend/writer.ts";
 import {
   ActionWorked,
   Completeness,
+  MAX_ASSESSMENTS,
+  MAX_QUESTIONS,
   OpaqueId,
   SCHEMA_VERSION,
   StatusReported,
-  validationDetails,
   type AssessmentResponse,
   type ObservationAnswer,
 } from "../contracts/index.ts";
-import { HttpError } from "../http/respond.ts";
 import { log } from "../http/log.ts";
+import { parseBody } from "../http/respond.ts";
+import { BoundedMap } from "../util.ts";
 
-/** Evaluaciones por sesión: la inicial + 3 rondas de preguntas. */
-const MAX_ASSESSMENTS = 4;
-const MAX_QUESTIONS = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ConversationId = z.string().min(1).max(200).nullish().transform((v) => v ?? null);
@@ -105,11 +104,7 @@ interface ToolSession {
 }
 
 function parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    throw new HttpError(422, "VALIDATION_ERROR", "Parámetros de la herramienta inválidos", { details: validationDetails(result.error) });
-  }
-  return result.data;
+  return parseBody(schema, raw, "Parámetros de la herramienta inválidos");
 }
 
 const NOT_REGISTERED_PENDING =
@@ -119,7 +114,7 @@ const NOT_REGISTERED_FAILED = "NO digas que quedó registrado. Di que no se pudo
 export class VoiceTools {
   private readonly now: () => Date;
   /** Estado por sesión de voz; vive lo que dura una llamada. */
-  private readonly sessions = new Map<string, ToolSession>();
+  private readonly sessions = new BoundedMap<string, ToolSession>();
 
   constructor(private readonly deps: VoiceToolsDeps) {
     this.now = deps.now ?? (() => new Date());
@@ -131,22 +126,18 @@ export class VoiceTools {
     const changeNoticedAt =
       input.change_noticed_days_ago === null ? null : startOfUtcDay(this.now().getTime() - input.change_noticed_days_ago * DAY_MS);
 
-    const outcome = await this.deps.writer.submitFollowup(
-      input.followup_id,
-      {
-        schema_version: SCHEMA_VERSION,
-        session_id: input.session_id,
-        channel: "voice",
-        status_reported: input.status_reported,
-        user_statement: input.user_statement,
-        actions_taken: input.actions_taken,
-        action_worked: input.action_worked,
-        change_noticed_at: changeNoticedAt,
-        provider_reference: input.conversation_id,
-        is_demo: this.deps.isDemo,
-      },
-      followupIdempotencyKey(input.followup_id, input.session_id),
-    );
+    const outcome = await this.deps.writer.submitFollowup(input.followup_id, {
+      schema_version: SCHEMA_VERSION,
+      session_id: input.session_id,
+      channel: "voice",
+      status_reported: input.status_reported,
+      user_statement: input.user_statement,
+      actions_taken: input.actions_taken,
+      action_worked: input.action_worked,
+      change_noticed_at: changeNoticedAt,
+      provider_reference: input.conversation_id,
+      is_demo: this.deps.isDemo,
+    });
     log("info", "tool_submit_followup", { correlation_id: input.session_id, followup_id: input.followup_id, outcome: outcome.status });
 
     if (outcome.status === "pending") return ok({ registered: false, instruction: NOT_REGISTERED_PENDING });
@@ -263,7 +254,6 @@ export class VoiceTools {
     if (!session) {
       session = { assessments: 0, last_assessment_id: null, plot: null, reports: 0 };
       this.sessions.set(id, session);
-      if (this.sessions.size > 5000) this.sessions.delete(this.sessions.keys().next().value!);
     }
     return session;
   }
@@ -271,17 +261,7 @@ export class VoiceTools {
 
 /** Lo que el agente necesita para hablar; nada de `reason` interno ni IDs de datasets. */
 function forAgent(assessment: AssessmentResponse, questionsLeft: number) {
-  const needs = [...assessment.information_needs]
-    .sort((a, b) => a.priority - b.priority)
-    .map(({ need_code, variable, farmer_hint, answer_type, options, priority, can_be_unknown }) => ({
-      need_code,
-      variable,
-      farmer_hint,
-      answer_type,
-      options,
-      priority,
-      can_be_unknown,
-    }));
+  const needs = [...assessment.information_needs].sort((a, b) => a.priority - b.priority).map(({ reason: _, ...need }) => need);
   const base = {
     assessment_id: assessment.assessment_id,
     disposition: assessment.disposition,

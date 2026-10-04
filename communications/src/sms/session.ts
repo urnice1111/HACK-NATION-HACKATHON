@@ -6,8 +6,7 @@
  * En memoria: si el proceso se reinicia, la conversación vuelve a empezar.
  * Lo que no se puede perder (el reporte y su deduplicación) vive en el
  * backend, con una Idempotency-Key derivada del MessageSid. Persistir las
- * sesiones requiere una tabla del Integrante 3; la interfaz permite cambiar
- * la implementación sin tocar la conversación.
+ * sesiones requiere una tabla del Integrante 3.
  */
 import type {
   ActionWorked,
@@ -34,7 +33,6 @@ export interface SmsSession {
   phone_e164: string;
   /** MessageSid del primer SMS: `provider_reference` y base de la Idempotency-Key del reporte. */
   first_message_sid: string;
-  created_at: string;
   last_activity_at: number;
   stage: Stage;
   invalid_replies: number;
@@ -67,7 +65,6 @@ export interface FollowupSmsSession {
   outbound_reference: string | null;
   /** MessageSid de la primera respuesta: `provider_reference` y base de la Idempotency-Key. */
   first_reply_sid: string | null;
-  created_at: string;
   last_activity_at: number;
   stage: FollowupStage;
   invalid_replies: number;
@@ -80,63 +77,9 @@ export interface FollowupSmsSession {
 
 export type AnySession = SmsSession | FollowupSmsSession;
 
-export interface SessionStore {
-  get(phone: string): AnySession | undefined;
-  set(session: AnySession): void;
-  delete(phone: string): void;
-  all(): Iterable<AnySession>;
-}
+/** Sesiones por teléfono E.164. */
+export type SessionStore = Map<string, AnySession>;
 
 export function isOpen(session: AnySession | undefined): session is AnySession {
   return session !== undefined && (session.kind === "help" ? session.stage.kind !== "closed" : session.stage !== "closed");
-}
-
-export class MemorySessionStore implements SessionStore {
-  private readonly sessions = new Map<string, AnySession>();
-  get(phone: string) {
-    return this.sessions.get(phone);
-  }
-  set(session: AnySession) {
-    this.sessions.set(session.phone_e164, session);
-  }
-  delete(phone: string) {
-    this.sessions.delete(phone);
-  }
-  all() {
-    return this.sessions.values();
-  }
-}
-
-/** Serializa el trabajo por clave: dos SMS seguidos del mismo teléfono no se pisan. */
-export class KeyedMutex {
-  private readonly tails = new Map<string, Promise<unknown>>();
-
-  run<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const previous = this.tails.get(key) ?? Promise.resolve();
-    const next = previous.then(task, task);
-    const tail = next.catch(() => undefined);
-    this.tails.set(key, tail);
-    void tail.then(() => {
-      if (this.tails.get(key) === tail) this.tails.delete(key);
-    });
-    return next;
-  }
-}
-
-/** Respuestas ya enviadas por MessageSid, para contestar igual a un webhook repetido. */
-export class ProcessedMessages {
-  private readonly replies = new Map<string, string>();
-  constructor(private readonly capacity = 5000) {}
-
-  get(sid: string): string | undefined {
-    return this.replies.get(sid);
-  }
-
-  remember(sid: string, twiml: string): void {
-    this.replies.set(sid, twiml);
-    if (this.replies.size > this.capacity) {
-      const oldest = this.replies.keys().next().value;
-      if (oldest !== undefined) this.replies.delete(oldest);
-    }
-  }
 }

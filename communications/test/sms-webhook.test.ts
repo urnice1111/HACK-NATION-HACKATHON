@@ -14,7 +14,7 @@ import { createCommsServer } from "../src/server/app.ts";
 import { SmsConversation } from "../src/sms/conversation.ts";
 import { FollowupSmsFlow } from "../src/sms/followup.ts";
 import { sms } from "../src/sms/messages.ts";
-import { MemorySessionStore } from "../src/sms/session.ts";
+import type { SessionStore } from "../src/sms/session.ts";
 import { StubSmsSender } from "../src/twilio/sender.ts";
 
 const SERVICE_TOKEN = "test-service-token";
@@ -58,7 +58,7 @@ before(async () => {
   };
   client = new BackendClient({ baseUrl: backendUrl, serviceToken: SERVICE_TOKEN, timeoutMs: 2000, fetch: scenarioFetch });
   writer = new BackendWriter(client, [50, 200]);
-  const store = new MemorySessionStore();
+  const store: SessionStore = new Map();
   followups = new FollowupSmsFlow({
     client,
     writer,
@@ -147,7 +147,7 @@ describe("webhook SMS: conversación", () => {
   it("número conocido: confirma identidad, pide consentimiento, pregunta y registra el reporte", async () => {
     const phone = "+12025550101";
     const first = await sendSms(phone, "Tengo manchas en las hojas del cafe");
-    assert.equal(first.reply, sms.identifyOne("Rosa"));
+    assert.equal(first.reply, sms.identify(["Rosa"]));
 
     // Ya dio permiso de guardar reportes: solo se confirma este reporte.
     assert.equal((await sendSms(phone, "1")).reply, sms.confirmReport);
@@ -192,7 +192,7 @@ describe("webhook SMS: conversación", () => {
   it("teléfono compartido: solo nombres antes de confirmar; usa la parcela del elegido", async () => {
     const phone = "+12025550102";
     const first = await sendSms(phone, "hola");
-    assert.equal(first.reply, sms.identifyMany(["Tomás", "Lucía"]));
+    assert.equal(first.reply, sms.identify(["Tomás", "Lucía"]));
     assert.doesNotMatch(first.reply!, /Parcela|plot_/);
 
     await sendSms(phone, "2");
@@ -246,7 +246,7 @@ describe("webhook SMS: conversación", () => {
   it("primera vez: pide los tres permisos por separado y los guarda", async () => {
     const phone = "+12025550108";
     const first = await sendSms(phone, "manchas en hojas");
-    assert.equal(first.reply, sms.identifyOne("Raúl"));
+    assert.equal(first.reply, sms.identify(["Raúl"]));
     assert.equal((await sendSms(phone, "1")).reply, sms.consent);
     assert.equal((await sendSms(phone, "si")).reply, sms.consentNotifications);
     assert.equal((await sendSms(phone, "no")).reply, sms.consentFollowupCalls);

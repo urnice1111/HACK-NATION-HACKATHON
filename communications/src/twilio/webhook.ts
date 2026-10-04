@@ -28,7 +28,7 @@ export function formParams(raw: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(raw));
 }
 
-export function escapeXml(value: string): string {
+function escapeXml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

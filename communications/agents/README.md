@@ -50,7 +50,7 @@ Flujo completo (secciones 2.2 y 17):
 1. `.env`: `ELEVENLABS_API_KEY`, `ELEVENLABS_FOLLOWUP_AGENT_ID`, `ELEVENLABS_AGENT_PHONE_NUMBER_ID`, `ELEVENLABS_TOOL_SECRET`, `COMMS_SERVICE_TOKEN` y tu celular en `DEMO_ALLOWED_NUMBERS`.
 2. En el mock, asocia tu celular a Marta (seguimiento vencido `followup_demo_05`): `MOCK_PHONE_OVERRIDES=contact_demo_05=+52…`.
 3. `npm run mock:backend`, `npm run dev` y `ngrok http 8080 --url=<PUBLIC_BASE_URL>`.
-4. Dispara el evento (o espera al sondeo, dentro de 08:00–19:00 hora de México):
+4. Dispara el evento (o espera al sondeo). Fuera de 08:00–19:00 hora de México responde `deferred / outside_hours`; para probar de noche pon `DEMO_IGNORE_ALLOWED_HOURS=true` en `.env` y reinicia `npm run dev`. Usa un `event_id` nuevo en cada prueba: uno repetido devuelve el resultado guardado (`replayed: true`).
 
    ```bash
    curl -X POST "$PUBLIC_BASE_URL/v1/followups/followup_demo_05/dispatch" \

@@ -16,6 +16,7 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  MAX_QUESTIONS,
   SCHEMA_VERSION,
   type AssessmentRequest,
   type AssessmentResponse,
@@ -26,9 +27,7 @@ import {
 } from "../contracts/index.ts";
 import { PROTOCOL_ID, THREAT_CODE, type FixtureResolution } from "./fixtures.ts";
 
-export const MOCK_MODEL_VERSION = "mock-advisor-0.2";
-/** Máximo de preguntas al agricultor por llamada (sección 17). */
-export const MAX_QUESTIONS = 5;
+const MOCK_MODEL_VERSION = "mock-advisor-0.2";
 
 type NeedTemplate = Omit<InformationNeed, "priority">;
 

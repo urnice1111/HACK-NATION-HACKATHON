@@ -1,13 +1,17 @@
 /**
  * Copia local y provisional de los contratos v2 (secciones 8, 9, 10 y 11 de
- * delegacion_mvp_agricultura.md). La fuente oficial será `contracts/`, del
- * Integrante 3; cuando exista, este archivo se reemplaza por un import de allí.
+ * INSTRUCTIONS.md, en la raíz del repo). La fuente oficial es `contracts/`, del
+ * Integrante 3; ver README, "Pendiente de acordar con el Integrante 3".
  * No cambies nombres de enums aquí sin acuerdo del equipo.
  */
 import { z } from "zod";
 
 export const SCHEMA_VERSION = "2.0" as const;
 export const SchemaVersion = z.literal(SCHEMA_VERSION);
+
+/** Límites por llamada o conversación SMS (sección 17): la evaluación inicial + 3 rondas, y 5 preguntas. */
+export const MAX_ASSESSMENTS = 4;
+export const MAX_QUESTIONS = 5;
 
 // --- Primitivos (sección 8) ---
 
@@ -31,14 +35,9 @@ export const Channel = z.enum(["voice", "sms", "operator"]);
 export const Completeness = z.enum(["partial", "sufficient"]);
 export const ProcessingStatus = z.enum(["pending", "processed", "failed"]);
 export const MeasurementSource = z.enum(["farmer_reported", "sensor", "technician"]);
-
-export const InspectionPriority = z.enum(["unknown", "low", "medium", "high"]);
-export const LocalCaseStatus = z.enum(["none", "reported", "suspected", "confirmed", "monitoring", "resolved"]);
 export const DataFreshness = z.enum(["fresh", "stale", "unknown"]);
 
 export const CaseStatus = z.enum(["reported", "suspected", "confirmed", "monitoring", "resolved"]);
-export const AlertStatus = z.enum(["pending_review", "approved", "rejected", "cancelled", "queued"]);
-export const NotificationStatus = z.enum(["queued", "sending", "accepted", "delivered", "failed", "unknown", "cancelled"]);
 export const FollowupStatus = z.enum(["scheduled", "contacting", "responded", "no_response", "failed", "cancelled"]);
 
 // --- Enums nuevos en v2 (secciones 9, 10.1 y 10.4) ---
@@ -47,28 +46,6 @@ export const AnswerType = z.enum(["yes_no", "number_with_unit", "choice", "free_
 export const StatusReported = z.enum(["worse", "same", "improved", "resolved", "unknown"]);
 export const ActionWorked = z.enum(["yes", "no", "partial", "unknown"]);
 export const ResolutionVerification = z.enum(["farmer_reported", "verified", "disputed"]);
-export const ResolutionOutcome = z.enum(["resolved", "improved_enough"]);
-
-/**
- * Catálogo inicial de `need_code` (sección 17). El contrato acepta cualquier
- * código para no romper si el Integrante 2 añade uno; esta lista sirve para
- * las plantillas SMS. No renombrar sin acuerdo del equipo.
- */
-export const KNOWN_NEED_CODES = [
-  "leaf_underside",
-  "spot_appearance",
-  "affected_extent",
-  "leaf_drop",
-  "symptom_onset_days",
-  "coffee_variety",
-  "shade_level",
-  "local_weather_perception",
-  "actions_taken",
-] as const;
-export type KnownNeedCode = (typeof KNOWN_NEED_CODES)[number];
-
-/** Estados de notificación que un callback tardío no puede degradar (sección 11). */
-export const TERMINAL_NOTIFICATION_STATUSES = ["delivered", "failed", "cancelled"] as const;
 
 // --- Medición (sección 9) ---
 
@@ -128,16 +105,10 @@ export const OutboxEvent = z.strictObject({
   payload: z.record(z.string(), z.unknown()),
 });
 
-export type Measurement = z.infer<typeof Measurement>;
 export type ErrorDetail = z.infer<typeof ErrorDetail>;
 export type ErrorBody = z.infer<typeof ErrorBody>;
-export type OutboxEvent = z.infer<typeof OutboxEvent>;
-export type Channel = z.infer<typeof Channel>;
-export type Completeness = z.infer<typeof Completeness>;
 export type CaseStatus = z.infer<typeof CaseStatus>;
 export type FollowupStatus = z.infer<typeof FollowupStatus>;
-export type NotificationStatus = z.infer<typeof NotificationStatus>;
-export type AnswerType = z.infer<typeof AnswerType>;
 export type StatusReported = z.infer<typeof StatusReported>;
 export type ActionWorked = z.infer<typeof ActionWorked>;
 export type ResolutionVerification = z.infer<typeof ResolutionVerification>;

@@ -14,7 +14,7 @@ import type { MockState } from "../src/mock-backend/state.ts";
 import { createCommsServer } from "../src/server/app.ts";
 import { SmsConversation } from "../src/sms/conversation.ts";
 import { FollowupSmsFlow } from "../src/sms/followup.ts";
-import { MemorySessionStore } from "../src/sms/session.ts";
+import type { SessionStore } from "../src/sms/session.ts";
 import { VoiceTools } from "../src/tools/voice-tools.ts";
 import { StubSmsSender } from "../src/twilio/sender.ts";
 
@@ -29,6 +29,7 @@ let client: BackendClient;
 let writer: BackendWriter;
 let dispatcher: FollowupDispatcher;
 let tools: VoiceTools;
+let followupSms: FollowupSmsFlow;
 let commsUrl: string;
 const caller = new StubOutboundCaller();
 const sender = new StubSmsSender();
@@ -45,9 +46,9 @@ before(async () => {
   mockState = mock.state;
   client = new BackendClient({ baseUrl: await listen(mock.server), serviceToken: SERVICE_TOKEN, timeoutMs: 2000 });
   writer = new BackendWriter(client, [20, 50]);
-  const store = new MemorySessionStore();
+  const store: SessionStore = new Map();
   const now = () => new Date(clock);
-  const followupSms = new FollowupSmsFlow({
+  followupSms = new FollowupSmsFlow({
     client,
     writer,
     store,
@@ -350,5 +351,31 @@ describe("evento followup.due por HTTP (PROPUESTO)", () => {
     assert.equal(replay.status, 200);
     assert.equal(replay.json.replayed, true);
     assert.equal(caller.calls.length, calls, "un evento repetido no vuelve a llamar");
+  });
+});
+
+describe("DEMO_IGNORE_ALLOWED_HOURS en el despachador", () => {
+  it("fuera de horario: sin la opción espera; con la opción (demo) llama", async () => {
+    const created = mockState.scheduleFollowup("case_demo_06");
+    const listed = await followup(byId(created.id));
+    // Horario del contacto que ya pasó a esta hora (17:xx en México).
+    const item = { ...listed, contact: { ...listed.contact, allowed_hours: { start: "06:00", end: "07:00" } } };
+    assert.deepEqual(await dispatcher.dispatch(item), { status: "deferred", reason: "outside_hours" });
+
+    const nightly = new FollowupDispatcher({
+      client,
+      writer,
+      caller,
+      followupSms,
+      isDemo: true,
+      demoAllowlist: new Set(["+12025550106"]),
+      ignoreAllowedHours: true,
+      callAttempts: 3,
+      callResultTimeoutMs: 10 * MINUTE,
+      placementBackoffMs: 2 * MINUTE,
+      now: () => new Date(clock),
+    });
+    const result = await nightly.dispatch(item);
+    assert.equal(result.status, "call_placed");
   });
 });

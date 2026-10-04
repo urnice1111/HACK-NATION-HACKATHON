@@ -21,12 +21,6 @@ interface SessionGrant {
   plot_ids: Set<string>;
 }
 
-interface IdempotentResult {
-  fingerprint: string;
-  status: number;
-  body: unknown;
-}
-
 /** JSON canónico (claves ordenadas) para comparar cuerpos con la misma clave. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -52,10 +46,11 @@ export class MockState {
   readonly resolutions = structuredClone(fixtures.resolutions);
   readonly environment = structuredClone(fixtures.environment);
   readonly reports = new Map<string, ReportDetail>();
+  /** `scope\0key` → respuesta original y huella del cuerpo (Idempotency-Key). */
+  readonly idempotency = new Map<string, { fingerprint: string; status: number; body: unknown }>();
 
   private readonly candidateGrants = new Map<string, CandidateGrant>();
   private readonly sessionGrants = new Map<string, SessionGrant>();
-  private readonly idempotency = new Map<string, IdempotentResult>();
 
   constructor(
     private readonly now: () => Date = () => new Date(),
@@ -196,17 +191,5 @@ export class MockState {
       updated += 1;
     }
     return updated;
-  }
-
-  // --- Idempotencia ---
-
-  idempotentLookup(scope: string, key: string, body: unknown): { hit: IdempotentResult } | { conflict: true } | null {
-    const stored = this.idempotency.get(`${scope}\u0000${key}`);
-    if (!stored) return null;
-    return stored.fingerprint === fingerprint(body) ? { hit: stored } : { conflict: true };
-  }
-
-  idempotentStore(scope: string, key: string, body: unknown, status: number, response: unknown): void {
-    this.idempotency.set(`${scope}\u0000${key}`, { fingerprint: fingerprint(body), status, body: response });
   }
 }

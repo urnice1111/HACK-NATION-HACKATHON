@@ -60,24 +60,6 @@ export function reportIdempotencyKey(sessionId: string, turn: number): string {
   return `report-${sessionId}-turn-${String(turn).padStart(2, "0")}`;
 }
 
-export function followupIdempotencyKey(followupId: string, sessionId: string): string {
-  return `followup-${followupId}-${sessionId}`;
-}
-
-/** Un intento por sesión y estado: repetir el callback del proveedor no cuenta otro intento. */
-export function followupAttemptIdempotencyKey(followupId: string, sessionId: string, status: string): string {
-  return `followup-attempt-${followupId}-${sessionId}-${status}`;
-}
-
-export function consentIdempotencyKey(sessionId: string): string {
-  return `consent-${sessionId}`;
-}
-
-/** La baja se deduplica por el MessageSid del SMS que la pidió. */
-export function revocationIdempotencyKey(messageSid: string): string {
-  return `revocation-${messageSid}`;
-}
-
 export class BackendClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -87,13 +69,6 @@ export class BackendClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs ?? 8000;
     this.fetchImpl = options.fetch ?? fetch;
-  }
-
-  static fromEnv(): BackendClient {
-    const baseUrl = process.env.BACKEND_BASE_URL;
-    const serviceToken = process.env.BACKEND_SERVICE_TOKEN;
-    if (!baseUrl || !serviceToken) throw new Error("Faltan BACKEND_BASE_URL o BACKEND_SERVICE_TOKEN");
-    return new BackendClient({ baseUrl, serviceToken, timeoutMs: Number(process.env.BACKEND_TIMEOUT_MS ?? 8000) });
   }
 
   resolveContact(body: ContactResolutionRequest, opts: CallOptions = {}) {
@@ -124,7 +99,13 @@ export class BackendClient {
     return this.call("GET", `/v1/reports/${encodeURIComponent(reportId)}`, ReportDetail, { opts });
   }
 
-  submitFollowupResponse(followupId: string, body: FollowupResponseRequest, idempotencyKey: string, opts: CallOptions = {}) {
+  /** Una respuesta por seguimiento y sesión. */
+  submitFollowupResponse(
+    followupId: string,
+    body: FollowupResponseRequest,
+    idempotencyKey = `followup-${followupId}-${body.session_id}`,
+    opts: CallOptions = {},
+  ) {
     return this.call("POST", `/v1/followups/${encodeURIComponent(followupId)}/responses`, FollowupResponseCreated, {
       body,
       opts: withSession(opts, body.session_id),
@@ -139,8 +120,16 @@ export class BackendClient {
     return this.call("GET", `/v1/followups?${query}`, FollowupList, { opts });
   }
 
-  /** PROPUESTO: registra un intento de contacto; `contacting` liga la sesión a la parcela del caso. */
-  recordFollowupAttempt(followupId: string, body: FollowupAttemptRequest, idempotencyKey: string, opts: CallOptions = {}) {
+  /**
+   * PROPUESTO: registra un intento de contacto; `contacting` liga la sesión a la parcela del caso.
+   * Un intento por sesión y estado: repetir el callback del proveedor no cuenta otro intento.
+   */
+  recordFollowupAttempt(
+    followupId: string,
+    body: FollowupAttemptRequest,
+    idempotencyKey = `followup-attempt-${followupId}-${body.session_id}-${body.status}`,
+    opts: CallOptions = {},
+  ) {
     return this.call("POST", `/v1/followups/${encodeURIComponent(followupId)}/attempts`, FollowupAttemptRecorded, {
       body,
       opts: withSession(opts, body.session_id),
@@ -148,8 +137,8 @@ export class BackendClient {
     });
   }
 
-  /** PROPUESTO: guarda los tres permisos de la sección 17. */
-  recordConsent(body: ConsentRequest, idempotencyKey: string, opts: CallOptions = {}) {
+  /** PROPUESTO: guarda los tres permisos de la sección 17; una escritura por sesión. */
+  recordConsent(body: ConsentRequest, idempotencyKey = `consent-${body.session_id}`, opts: CallOptions = {}) {
     return this.call("POST", "/v1/consents", ConsentRecorded, {
       body,
       opts: withSession(opts, body.session_id),

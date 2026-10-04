@@ -7,7 +7,7 @@ import { VoiceTools } from "../tools/voice-tools.ts";
 import { log } from "../http/log.ts";
 import { SmsConversation } from "../sms/conversation.ts";
 import { FollowupSmsFlow } from "../sms/followup.ts";
-import { MemorySessionStore } from "../sms/session.ts";
+import type { SessionStore } from "../sms/session.ts";
 import { StubSmsSender, TwilioSmsSender } from "../twilio/sender.ts";
 import { createCommsServer } from "./app.ts";
 
@@ -20,7 +20,7 @@ const client = new BackendClient({
   timeoutMs: config.SMS_STEP_TIMEOUT_MS,
 });
 const writer = new BackendWriter(client, config.REPORT_RETRY_DELAYS_MS);
-const store = new MemorySessionStore();
+const store: SessionStore = new Map();
 const sender = config.TWILIO_ACCOUNT_SID
   ? new TwilioSmsSender({
       accountSid: config.TWILIO_ACCOUNT_SID,
@@ -37,6 +37,7 @@ const followups = new FollowupSmsFlow({
   sender,
   isDemo: config.IS_DEMO,
   demoAllowlist: config.DEMO_ALLOWED_NUMBERS,
+  ignoreAllowedHours: config.DEMO_IGNORE_ALLOWED_HOURS,
   replyWindowMs: config.FOLLOWUP_SMS_REPLY_WINDOW_MS,
 });
 const caller =
@@ -54,6 +55,7 @@ const dispatcher = new FollowupDispatcher({
   followupSms: followups,
   isDemo: config.IS_DEMO,
   demoAllowlist: config.DEMO_ALLOWED_NUMBERS,
+  ignoreAllowedHours: config.DEMO_IGNORE_ALLOWED_HOURS,
   callAttempts: config.FOLLOWUP_CALL_ATTEMPTS,
   callResultTimeoutMs: config.FOLLOWUP_CALL_RESULT_TIMEOUT_MS,
   placementBackoffMs: config.FOLLOWUP_PLACEMENT_BACKOFF_MS,
@@ -62,7 +64,7 @@ const dispatcher = new FollowupDispatcher({
 const voiceClient = new BackendClient({
   baseUrl: config.BACKEND_BASE_URL,
   serviceToken: config.BACKEND_SERVICE_TOKEN,
-  timeoutMs: Number(process.env.BACKEND_TIMEOUT_MS ?? 8000),
+  timeoutMs: config.BACKEND_TIMEOUT_MS,
 });
 const voiceTools = new VoiceTools({
   client: voiceClient,
@@ -104,6 +106,10 @@ if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
 const sweeper = setInterval(() => void conversation.sweep(), 60_000);
 sweeper.unref();
 
+if (config.DEMO_IGNORE_ALLOWED_HOURS) {
+  log("warn", "demo_ignore_allowed_hours", { message: "Demo: se contacta fuera del horario permitido (08:00–19:00). No usar con agricultores reales." });
+}
+
 server.listen(config.COMMS_PORT, "127.0.0.1", () => {
   log("info", "comms_listening", {
     local_url: `http://127.0.0.1:${config.COMMS_PORT}`,
@@ -113,6 +119,7 @@ server.listen(config.COMMS_PORT, "127.0.0.1", () => {
     outbound_calls: caller instanceof ElevenLabsOutboundCaller ? "elevenlabs" : "stub",
     voice_tools: config.ELEVENLABS_TOOL_SECRET ? "enabled" : "disabled",
     followup_poll_ms: config.FOLLOWUP_POLL_INTERVAL_MS,
+    demo_ignore_allowed_hours: config.DEMO_IGNORE_ALLOWED_HOURS,
     demo_allowlist_size: config.DEMO_ALLOWED_NUMBERS.size,
   });
 });

@@ -12,9 +12,7 @@
  *   backend_unavailable  → cualquier ruta responde 503 antes de procesar
  *   delay:<ms>           → procesa y tarda en responder (timeout ambiguo)
  */
-import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { z } from "zod";
 import {
   AssessmentRequest,
   ConsentRequest,
@@ -25,7 +23,6 @@ import {
   FollowupStatus,
   ReportRequest,
   SCHEMA_VERSION,
-  validationDetails,
   type ConsentRecorded,
   type ConsentRevoked,
   type ContactConsent,
@@ -39,10 +36,10 @@ import {
   type ReportDetail,
 } from "../contracts/index.ts";
 import { log, maskPhone } from "../http/log.ts";
-import { HttpError, headerValue, readJson, requestIdFrom, safeIdHeader, sendJson } from "../http/respond.ts";
+import { HttpError, bearerMatches, headerValue, parseBody, readJson, requestIdFrom, safeIdHeader, sendJson } from "../http/respond.ts";
 import { assess } from "./advisor.ts";
 import { FOLLOWUP_CALL_ATTEMPTS, FOLLOWUP_RETRY_MS, type FixtureContact, type FixtureResolution } from "./fixtures.ts";
-import { MockState } from "./state.ts";
+import { MockState, fingerprint } from "./state.ts";
 
 const MAX_DELAY_MS = 30_000;
 
@@ -64,16 +61,6 @@ interface Reply {
   status: number;
   body: unknown;
   headers?: Record<string, string>;
-}
-
-function parse<T extends z.ZodType>(schema: T, body: unknown): z.infer<T> {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    throw new HttpError(422, "VALIDATION_ERROR", "El cuerpo no cumple el contrato v2", {
-      details: validationDetails(result.error),
-    });
-  }
-  return result.data;
 }
 
 function requireDemo(body: { is_demo: boolean }): void {
@@ -106,33 +93,26 @@ function consentOf(contact: FixtureContact | undefined): ContactConsent {
 /** Seguimientos que aún admiten respuesta (una respuesta tardía a `no_response` se acepta). */
 const OPEN_FOLLOWUP_STATUSES = new Set(["scheduled", "contacting", "no_response"]);
 
-function tokenMatches(header: string | null, expected: string): boolean {
-  if (!header?.startsWith("Bearer ")) return false;
-  const given = Buffer.from(header.slice("Bearer ".length));
-  const wanted = Buffer.from(expected);
-  return given.length === wanted.length && timingSafeEqual(given, wanted);
-}
-
 export function createMockBackend(options: MockBackendOptions): { server: Server; state: MockState } {
   if (!options.serviceToken) throw new Error("serviceToken es obligatorio");
   const state = new MockState(options.now, options.phoneOverrides);
 
   /** Repite el resultado original o devuelve 409 si la clave llega con otro cuerpo. */
   function idempotent(scope: string, key: string, body: unknown, run: () => Reply): Reply {
-    const previous = state.idempotentLookup(scope, key, body);
-    if (previous && "conflict" in previous) {
+    const id = `${scope}\u0000${key}`;
+    const hash = fingerprint(body);
+    const previous = state.idempotency.get(id);
+    if (previous && previous.fingerprint !== hash) {
       throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "La Idempotency-Key ya se usó con otro cuerpo");
     }
-    if (previous) {
-      return { status: previous.hit.status, body: previous.hit.body, headers: { "Idempotency-Replayed": "true" } };
-    }
+    if (previous) return { status: previous.status, body: previous.body, headers: { "Idempotency-Replayed": "true" } };
     const reply = run();
-    state.idempotentStore(scope, key, body, reply.status, reply.body);
+    state.idempotency.set(id, { fingerprint: hash, status: reply.status, body: reply.body });
     return reply;
   }
 
   function contactResolution(ctx: Ctx, raw: unknown): Reply {
-    const body = parse(ContactResolutionRequest, raw);
+    const body = parseBody(ContactResolutionRequest, raw);
     requireDemo(body);
     const matches = state.farmersForPhone(body.phone_e164);
     const isShared = matches.length > 1 || matches.some((f) => state.contactOf(f.id)?.is_shared === true);
@@ -219,7 +199,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     if (ctx.scenario === "advisor_unavailable") {
       throw new HttpError(503, "ADVISOR_UNAVAILABLE", "El asesor no está disponible", { retryable: true });
     }
-    const body = parse(AssessmentRequest, raw);
+    const body = parseBody(AssessmentRequest, raw);
     requireDemo(body);
     if (!state.plots.some((p) => p.id === body.plot_id)) throw new HttpError(404, "NOT_FOUND", "Parcela inexistente");
     return {
@@ -230,7 +210,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
   function createReport(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
-    const body = parse(ReportRequest, raw);
+    const body = parseBody(ReportRequest, raw);
     requireDemo(body);
 
     return idempotent("POST /v1/reports", key, body, () => {
@@ -351,7 +331,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
   /** PROPUESTO: `POST /v1/followups/{id}/attempts`. */
   function followupAttempt(ctx: Ctx, followupId: string, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
-    const body = parse(FollowupAttemptRequest, raw);
+    const body = parseBody(FollowupAttemptRequest, raw);
     requireDemo(body);
 
     return idempotent(`POST /v1/followups/${followupId}/attempts`, key, body, () => {
@@ -391,7 +371,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
   /** `POST /v1/followups/{id}/responses` (10.4). */
   function followupResponse(ctx: Ctx, followupId: string, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
-    const body = parse(FollowupResponseRequest, raw);
+    const body = parseBody(FollowupResponseRequest, raw);
     requireDemo(body);
 
     return idempotent(`POST /v1/followups/${followupId}/responses`, key, body, () => {
@@ -487,7 +467,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
   /** PROPUESTO: `POST /v1/consents`. Solo para el agricultor que la sesión confirmó. */
   function recordConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
-    const body = parse(ConsentRequest, raw);
+    const body = parseBody(ConsentRequest, raw);
     requireDemo(body);
 
     return idempotent("POST /v1/consents", key, body, () => {
@@ -510,7 +490,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
   /** PROPUESTO: `POST /v1/consents/revocations` ("BAJA" por SMS). Un teléfono desconocido revoca 0 contactos. */
   function revokeConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
-    const body = parse(ConsentRevocationRequest, raw);
+    const body = parseBody(ConsentRevocationRequest, raw);
     requireDemo(body);
 
     return idempotent("POST /v1/consents/revocations", key, body, () => {
@@ -527,7 +507,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
   async function route(ctx: Ctx, method: string, path: string): Promise<Reply> {
     if (method === "GET" && path === "/v1/health") return { status: 200, body: { status: "ok", is_demo: true } };
 
-    if (!tokenMatches(headerValue(ctx.req, "authorization"), options.serviceToken)) {
+    if (!bearerMatches(headerValue(ctx.req, "authorization"), options.serviceToken)) {
       throw new HttpError(401, "UNAUTHORIZED", "Credenciales de servicio ausentes o inválidas");
     }
     if (ctx.scenario === "backend_unavailable") {

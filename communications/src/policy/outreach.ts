@@ -2,9 +2,10 @@
  * Reglas para contactar de forma proactiva (seguimientos y avisos), sección 17:
  * consentimiento explícito, horario permitido en la hora local del agricultor
  * (08:00–19:00 por defecto) y, en demo, solo números de la lista blanca.
- * Fuera de horario el trabajo espera; nunca se fuerza.
+ * Fuera de horario el trabajo espera. La única excepción es
+ * `ignoreAllowedHours`, que solo tiene efecto en demo.
  */
-export const DEFAULT_ALLOWED_HOURS = { start: "08:00", end: "19:00" } as const;
+const DEFAULT_ALLOWED_HOURS = { start: "08:00", end: "19:00" } as const;
 
 export type OutreachDecision =
   | { ok: true }
@@ -19,6 +20,8 @@ export interface OutreachInput {
   isDemo: boolean;
   /** Lista blanca de demo; vacía = no se contacta a nadie. */
   demoAllowlist: ReadonlySet<string>;
+  /** DEMO_IGNORE_ALLOWED_HOURS: se ignora fuera de demo aunque llegue en true. */
+  ignoreAllowedHours?: boolean;
 }
 
 function minutes(hhmm: string): number | null {
@@ -47,6 +50,7 @@ export function isWithinAllowedHours(now: Date, timezone: string, hours: { start
 export function canContact(input: OutreachInput): OutreachDecision {
   if (!input.consent) return { ok: false, reason: "no_consent" };
   if (input.isDemo && !input.demoAllowlist.has(input.phone_e164)) return { ok: false, reason: "not_allowlisted" };
-  if (!isWithinAllowedHours(input.now, input.timezone, input.allowed_hours)) return { ok: false, reason: "outside_hours" };
+  const skipHours = input.isDemo && input.ignoreAllowedHours === true;
+  if (!skipHours && !isWithinAllowedHours(input.now, input.timezone, input.allowed_hours)) return { ok: false, reason: "outside_hours" };
   return { ok: true };
 }

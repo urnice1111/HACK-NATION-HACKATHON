@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type { InformationNeed } from "../src/contracts/index.ts";
-import { answerFrom, needQuestion } from "../src/sms/messages.ts";
+import { answerFrom, isBajaKeyword, needQuestion, parseActionWorked, parseStatusReported } from "../src/sms/messages.ts";
 
 function need(overrides: Partial<InformationNeed>): InformationNeed {
   return {
@@ -58,9 +58,7 @@ describe("normalización de respuestas", () => {
   });
 });
 
-describe("respuestas de seguimiento y baja", async () => {
-  const { isBajaKeyword, parseActionWorked, parseStatusReported } = await import("../src/sms/messages.ts");
-
+describe("respuestas de seguimiento y baja", () => {
   it("estado reportado por número o palabra; \"no sé\" → unknown", () => {
     assert.equal(parseStatusReported("1"), "worse");
     assert.equal(parseStatusReported("Sigue igual"), "same");

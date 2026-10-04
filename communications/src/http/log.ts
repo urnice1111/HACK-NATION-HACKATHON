@@ -1,5 +1,5 @@
 /** Versión que acompaña cada línea de log (sección 12). */
-export const SERVICE_VERSION = process.env.SERVICE_VERSION ?? "communications-0.1.0";
+const SERVICE_VERSION = process.env.SERVICE_VERSION ?? "communications-0.1.0";
 
 /** "+12025550101" → "+1******0101". Nunca se registra un teléfono completo. */
 export function maskPhone(phone: string): string {
