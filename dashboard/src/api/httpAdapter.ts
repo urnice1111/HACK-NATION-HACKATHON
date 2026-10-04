@@ -10,19 +10,10 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http:/
 // Sección 17: tres intentos de llamada antes del SMS. El backend no lo expone en la lista.
 const FOLLOWUP_CALL_ATTEMPTS = 3
 
-let tokenProvider: () => Promise<string | null> = async () => null
-
-// AuthContext registra aquí cómo obtener el JWT de Supabase.
-export function setTokenProvider(fn: () => Promise<string | null>) {
-  tokenProvider = fn
-}
-
 type RequestOptions = { method?: string; body?: unknown; idempotencyKey?: string }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  const token = await tokenProvider()
-  if (token) headers.Authorization = `Bearer ${token}`
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey
 

@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { BellRing, Check, Clock, Loader2, MessageSquareText, Users, X } from 'lucide-react'
+import { BellRing, Check, Clock, Loader2, Users, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { useAlerts, useReviewAlert } from '../api/hooks'
 import { ApiError } from '../api/client'
 import type { Alert } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
 import { Badge } from '../components/Badge'
 import { Panel } from '../components/Panel'
 import { QueryBoundary } from '../components/QueryBoundary'
@@ -13,7 +12,6 @@ import { ALERT_STATUS, DELIVERY } from '../lib/labels'
 import { PRIORITY } from '../lib/priority'
 
 function PendingAlert({ alert }: { alert: Alert }) {
-  const { can } = useAuth()
   const review = useReviewAlert()
   const [message, setMessage] = useState(alert.message)
   const [reason, setReason] = useState('')
@@ -50,61 +48,52 @@ function PendingAlert({ alert }: { alert: Alert }) {
         ))}
       </ul>
 
-      {can('review_alert') ? (
-        <>
-          <label className="block space-y-1 text-sm">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-ink-muted"><Users size={13} />Mensaje SMS para {alert.recipients_count} destinatario{alert.recipients_count === 1 ? '' : 's'}</span>
-            <textarea
-              value={message}
-              onChange={(e) => { setMessage(e.target.value); setFormError(null) }}
-              rows={3}
-              className="field resize-y"
-            />
-            <span className={`block text-right text-xs ${message.length > 160 ? 'text-prio-medium' : 'text-ink-muted'}`}>{message.length} / 160 caracteres</span>
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span className="text-xs font-medium text-ink-muted">Motivo (obligatorio para rechazar)</span>
-            <input
-              value={reason}
-              onChange={(e) => { setReason(e.target.value); setFormError(null) }}
-              className="field"
-              placeholder="Solo similitud ambiental, sin exposición"
-            />
-          </label>
+        <label className="block space-y-1 text-sm">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-ink-muted"><Users size={13} />Mensaje SMS para {alert.recipients_count} destinatario{alert.recipients_count === 1 ? '' : 's'}</span>
+          <textarea
+            value={message}
+            onChange={(e) => { setMessage(e.target.value); setFormError(null) }}
+            rows={3}
+            className="field resize-y"
+          />
+          <span className={`block text-right text-xs ${message.length > 160 ? 'text-prio-medium' : 'text-ink-muted'}`}>{message.length} / 160 caracteres</span>
+        </label>
+        <label className="block space-y-1 text-sm">
+          <span className="text-xs font-medium text-ink-muted">Motivo (obligatorio para rechazar)</span>
+          <input
+            value={reason}
+            onChange={(e) => { setReason(e.target.value); setFormError(null) }}
+            className="field"
+            placeholder="Solo similitud ambiental, sin exposición"
+          />
+        </label>
 
-          {formError && <p role="alert" className="text-sm text-prio-high">{formError}</p>}
-          {conflict && (
-            <p role="alert" className="rounded-md border border-prio-medium/30 bg-prio-medium/10 p-2.5 text-sm text-prio-medium">
-              {review.error?.message} La lista se actualizó con el estado actual.
-            </p>
-          )}
-          {review.isError && !conflict && (
-            <p role="alert" className="text-sm text-prio-high">No se pudo guardar la revisión. {review.error.message}</p>
-          )}
+        {formError && <p role="alert" className="text-sm text-prio-high">{formError}</p>}
+        {conflict && (
+          <p role="alert" className="rounded-md border border-prio-medium/30 bg-prio-medium/10 p-2.5 text-sm text-prio-medium">
+            {review.error?.message} La lista se actualizó con el estado actual.
+          </p>
+        )}
+        {review.isError && !conflict && (
+          <p role="alert" className="text-sm text-prio-high">No se pudo guardar la revisión. {review.error.message}</p>
+        )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => submit('approve')}
-              disabled={review.isPending}
-              className="btn-primary flex-1"
-            >
-              {review.isPending ? <><Loader2 size={15} className="animate-spin" />Guardando…</> : <><Check size={15} />Aprobar y enviar</>}
-            </button>
-            <button
-              onClick={() => submit('reject')}
-              disabled={review.isPending}
-              className="btn-ghost hover:border-prio-high/40 hover:text-prio-high"
-            >
-              <X size={15} />Rechazar
-            </button>
-          </div>
-        </>
-      ) : (
-        <div className="space-y-2">
-          <p className="flex gap-2 rounded-md border border-line bg-bg/50 p-2.5 text-sm"><MessageSquareText size={15} className="mt-0.5 shrink-0 text-ink-muted" />{alert.message}</p>
-          <p className="text-xs text-ink-muted">Tu rol puede ver las alertas, pero no aprobarlas.</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => submit('approve')}
+            disabled={review.isPending}
+            className="btn-primary flex-1"
+          >
+            {review.isPending ? <><Loader2 size={15} className="animate-spin" />Guardando…</> : <><Check size={15} />Aprobar y enviar</>}
+          </button>
+          <button
+            onClick={() => submit('reject')}
+            disabled={review.isPending}
+            className="btn-ghost hover:border-prio-high/40 hover:text-prio-high"
+          >
+            <X size={15} />Rechazar
+          </button>
         </div>
-      )}
     </li>
   )
 }

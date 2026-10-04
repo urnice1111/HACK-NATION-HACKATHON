@@ -1,12 +1,9 @@
 import { useState } from 'react'
-import { BellRing, CheckCircle2, LogOut, Map, PhoneCall, RotateCcw, Sprout, WifiOff } from 'lucide-react'
+import { BellRing, CheckCircle2, Map, PhoneCall, RotateCcw, Sprout, WifiOff } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { useAlerts, useFollowups, useResetDemo } from '../api/hooks'
 import { API_MODE } from '../api'
 import { mockControls } from '../api/mockAdapter'
-import { useAuth } from '../auth/AuthContext'
-
-const ROLE_LABEL = { operator: 'Operador', agronomist: 'Agrónomo', admin: 'Administrador' } as const
 
 function Count({ n, tone }: { n: number; tone: 'medium' | 'high' }) {
   if (!n) return null
@@ -14,11 +11,7 @@ function Count({ n, tone }: { n: number; tone: 'medium' | 'high' }) {
   return <span className={`absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[0.625rem] font-bold ring-2 ring-panel ${cls}`}>{n}</span>
 }
 
-const initials = (name = '') =>
-  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'
-
 export function NavBar() {
-  const { user, signOut, can } = useAuth()
   const alerts = useAlerts()
   const followups = useFollowups()
   const reset = useResetDemo()
@@ -60,34 +53,15 @@ export function NavBar() {
         <NavLink to="/casos-resueltos" className={link}><CheckCircle2 size={17} />Resueltos</NavLink>
       </nav>
 
-      <div className="flex items-center gap-3 border-t border-line/80 px-4 py-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-panel-2 text-xs font-semibold text-ink ring-1 ring-line">
-          {initials(user?.name)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{user?.name}</p>
-          <p className="text-xs text-ink-muted">{user ? ROLE_LABEL[user.role] : ''}</p>
-        </div>
-        {can('reset_demo') && API_MODE === 'mock' && (
-          <button
-            onClick={onReset}
-            disabled={reset.isPending}
-            title="Reiniciar demo"
-            aria-label="Reiniciar demo"
-            className="grid size-8 place-items-center rounded-md text-prio-medium transition-colors hover:bg-prio-medium/10 disabled:opacity-50"
-          >
-            <RotateCcw size={16} className={reset.isPending ? 'animate-spin' : ''} />
-          </button>
-        )}
+      {API_MODE === 'mock' && (
         <button
-          onClick={signOut}
-          title="Salir"
-          aria-label="Salir"
-          className="grid size-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-panel-2 hover:text-ink"
+          onClick={onReset}
+          disabled={reset.isPending}
+          className="flex w-full items-center gap-2 border-t border-line/80 px-4 py-2.5 text-xs text-prio-medium transition-colors hover:bg-prio-medium/10 disabled:opacity-50"
         >
-          <LogOut size={16} />
+          <RotateCcw size={14} className={reset.isPending ? 'animate-spin' : ''} />Reiniciar demo
         </button>
-      </div>
+      )}
 
       {API_MODE === 'mock' && (
         <label className="flex cursor-pointer items-center justify-between gap-2 border-t border-line/80 px-4 py-2.5 text-xs text-ink-muted">
