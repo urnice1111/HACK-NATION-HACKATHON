@@ -1,6 +1,6 @@
 {
   "name": "followup",
-  "language": "es",
+  "language": "en",
   "llm": "gpt-4.1-nano",
   "tts": {
     "model_id": "eleven_v4_turbo",

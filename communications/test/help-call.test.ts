@@ -1,6 +1,6 @@
 /**
- * Agente de ayuda (llamada entrante, sección 2.1) contra el mock: las herramientas
- * que ElevenLabs llama durante la conversación, en el orden del prompt.
+ * Help agent (inbound call, section 2.1) against the mock: the tools ElevenLabs
+ * calls during the conversation, in the prompt's order.
  */
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
@@ -28,7 +28,7 @@ let mockState: MockState;
 let writer: BackendWriter;
 let tools: VoiceTools;
 let commsUrl: string;
-/** Simula un candidate_token vencido: el backend lo rechaza con 403 CANDIDATE_TOKEN_INVALID. */
+/** Simulates an expired candidate_token: the backend rejects it with 403 CANDIDATE_TOKEN_INVALID. */
 let expireCandidateTokens = false;
 let conversationCounter = 0;
 const servers: Server[] = [];
@@ -45,17 +45,17 @@ before(async () => {
   const tokenExpiringFetch: typeof fetch = (input, init) => {
     if (expireCandidateTokens && String(input).endsWith("/v1/contact-resolution") && typeof init?.body === "string") {
       const body = JSON.parse(init.body) as { confirm_candidate_token: string | null };
-      if (body.confirm_candidate_token) return fetch(input, { ...init, body: JSON.stringify({ ...body, confirm_candidate_token: "vencido" }) });
+      if (body.confirm_candidate_token) return fetch(input, { ...init, body: JSON.stringify({ ...body, confirm_candidate_token: "expired" }) });
     }
     return fetch(input, init);
   };
   const client = new BackendClient({ baseUrl: await listen(mock.server), serviceToken: SERVICE_TOKEN, timeoutMs: 2000, fetch: tokenExpiringFetch });
   writer = new BackendWriter(client, [20, 50]);
   const now = () => new Date(clock);
-  tools = new VoiceTools({ client, writer, isDemo: true, defaultLanguage: "es", idleMs: 15 * MINUTE, now });
+  tools = new VoiceTools({ client, writer, isDemo: true, defaultLanguage: "en", idleMs: 15 * MINUTE, now });
   const store: SessionStore = new Map();
   const followups = new FollowupSmsFlow({ client, writer, store, sender: new StubSmsSender(), isDemo: true, demoAllowlist: new Set(), replyWindowMs: MINUTE, now });
-  const conversation = new SmsConversation({ client, store, writer, followups, isDemo: true, defaultLanguage: "es", idleMs: 30 * MINUTE, now });
+  const conversation = new SmsConversation({ client, store, writer, followups, isDemo: true, defaultLanguage: "en", idleMs: 30 * MINUTE, now });
   commsUrl = await listen(
     createCommsServer({
       publicBaseUrl: "https://comms.example.test",
@@ -73,7 +73,7 @@ after(async () => {
   await Promise.all(servers.map((s) => new Promise((r) => s.close(r))));
 });
 
-/** Una llamada entrante: `session_id` = `system__conversation_id`, como en ElevenLabs. */
+/** One inbound call: `session_id` = `system__conversation_id`, as in ElevenLabs. */
 function newCall() {
   conversationCounter += 1;
   const session_id = `conv_help_${conversationCounter}`;
@@ -91,42 +91,42 @@ function newCall() {
 
 const reportsOf = (sessionId: string) => [...mockState.reports.values()].filter((r) => r.session_id === sessionId);
 
-describe("agente de ayuda: identidad y parcela", () => {
-  it("número conocido: confirma, fija su parcela, evalúa y guarda el reporte", async () => {
+describe("help agent: identity and plot", () => {
+  it("known number: confirms, fixes their plot, assesses and saves the report", async () => {
     const { session_id, call } = newCall();
     const resolved = await call("resolve-farmer", { caller_phone: "+12025550101" });
     assert.equal(resolved.status, "candidates");
     assert.deepEqual(resolved.candidates, [{ number: 1, label: "Rosa" }]);
-    assert.doesNotMatch(JSON.stringify(resolved), /cand_|plot_demo|farmer_demo|\+1202/, "sin tokens, IDs ni teléfono para el modelo");
+    assert.doesNotMatch(JSON.stringify(resolved), /cand_|plot_demo|farmer_demo|\+1202/, "no tokens, IDs or phone for the model");
 
     const confirmed = await call("confirm-farmer", { candidate_number: 1 });
     assert.equal(confirmed.confirmed, true);
-    assert.deepEqual(confirmed.plots, [{ number: 1, label: "Parcela 1" }]);
+    assert.deepEqual(confirmed.plots, [{ number: 1, label: "Plot 1" }]);
     assert.equal(confirmed.report_permission, "granted");
     assert.deepEqual(confirmed.ask_permissions, []);
 
     const context = await call("get-plot-context");
     assert.equal(context.found, true);
-    assert.equal(context.plot_label, "Parcela 1");
+    assert.equal(context.plot_label, "Plot 1");
     assert.equal(context.crop, "coffee");
 
     assert.equal((await call("record-consent", { reports: true })).saved, true);
 
-    const first = await call("assess-observation", { user_statement: "Tengo manchas amarillas en las hojas", symptoms: ["manchas amarillas en hojas"] });
+    const first = await call("assess-observation", { user_statement: "I have yellow spots on the leaves", symptoms: ["yellow spots on leaves"] });
     assert.equal(first.disposition, "ask_more");
     const codes = first.information_needs.map((n: { need_code: string }) => n.need_code);
     const advice = await call("assess-observation", {
-      user_statement: "Tengo manchas amarillas en las hojas",
-      answers: [{ need_code: "leaf_underside", value: "polvo naranja o amarillo", raw_text: "como polvito naranja", unknown: false }],
+      user_statement: "I have yellow spots on the leaves",
+      answers: [{ need_code: "leaf_underside", value: "orange or yellow powder", raw_text: "like an orange dust", unknown: false }],
       asked_need_codes: codes,
     });
     assert.equal(advice.disposition, "advise");
 
-    // El modelo no puede cambiar la parcela confirmada.
+    // The model can't change the confirmed plot.
     const saved = await call("submit-report", {
       plot_id: "plot_demo_05",
       conversation_id: session_id,
-      user_statement: "Manchas amarillas y polvo naranja abajo de las hojas",
+      user_statement: "Yellow spots and orange powder under the leaves",
       completeness: "sufficient",
     });
     assert.equal(saved.registered, true);
@@ -137,42 +137,42 @@ describe("agente de ayuda: identidad y parcela", () => {
     assert.equal(report?.assessment_id, advice.assessment_id);
   });
 
-  it("teléfono compartido: solo nombres antes de confirmar; usa la parcela del elegido", async () => {
+  it("shared phone: names only before confirming; uses the chosen person's plot", async () => {
     const { session_id, call } = newCall();
     const resolved = await call("resolve-farmer", { caller_phone: "+12025550102" });
     assert.equal(resolved.is_shared_phone, true);
     assert.deepEqual(resolved.candidates.map((c: { label: string }) => c.label), ["Tomás", "Lucía"]);
 
     const early = await call("get-plot-context", { plot_number: 1 });
-    assert.equal(early.found, false, "sin confirmar no hay datos de nadie");
+    assert.equal(early.found, false, "no one's data before confirming");
     assert.equal(early.plot_label, undefined);
 
     assert.equal((await call("confirm-farmer", { candidate_number: 2 })).confirmed, true);
-    assert.equal((await call("get-plot-context")).plot_label, "Parcela 3");
+    assert.equal((await call("get-plot-context")).plot_label, "Plot 3");
     await call("record-consent", { reports: true });
-    assert.equal((await call("submit-report", { user_statement: "manchas", completeness: "partial" })).registered, true);
+    assert.equal((await call("submit-report", { user_statement: "spots", completeness: "partial" })).registered, true);
     assert.equal(reportsOf(session_id)[0]?.plot_id, "plot_demo_03");
   });
 
-  it("número desconocido o sin caller ID: registro mínimo, sin parcela ni evaluación", async () => {
+  it("unknown number or no caller ID: minimal record, no plot or assessment", async () => {
     for (const caller_phone of ["+12025550199", null]) {
       const { session_id, call } = newCall();
       const resolved = await call("resolve-farmer", { caller_phone });
       assert.equal(resolved.status, "no_match");
       assert.equal((await call("confirm-farmer", { candidate_number: 1 })).confirmed, false);
-      assert.equal((await call("assess-observation", { user_statement: "se secan las plantas" })).disposition, "no_plot");
+      assert.equal((await call("assess-observation", { user_statement: "the plants are drying out" })).disposition, "no_plot");
 
-      const withoutPermission = await call("submit-report", { user_statement: "se secan las plantas", completeness: "partial" });
+      const withoutPermission = await call("submit-report", { user_statement: "the plants are drying out", completeness: "partial" });
       assert.equal(withoutPermission.registered, false);
       assert.equal(reportsOf(session_id).length, 0);
 
       assert.equal((await call("record-consent", { reports: true })).valid_for_this_call_only, true);
-      assert.equal((await call("submit-report", { user_statement: "se secan las plantas", completeness: "partial" })).registered, true);
+      assert.equal((await call("submit-report", { user_statement: "the plants are drying out", completeness: "partial" })).registered, true);
       assert.equal(reportsOf(session_id)[0]?.plot_id, null);
     }
   });
 
-  it("candidato vencido: pide confirmar de nuevo con candidatos nuevos", async () => {
+  it("expired candidate: asks to confirm again with fresh candidates", async () => {
     const { call } = newCall();
     await call("resolve-farmer", { caller_phone: "+12025550101" });
     expireCandidateTokens = true;
@@ -184,8 +184,8 @@ describe("agente de ayuda: identidad y parcela", () => {
   });
 });
 
-describe("agente de ayuda: permisos", () => {
-  it("primera vez: guarda los tres permisos por separado", async () => {
+describe("help agent: permissions", () => {
+  it("first time: saves the three permissions separately", async () => {
     const { call } = newCall();
     await call("resolve-farmer", { caller_phone: "+12025550108" });
     const confirmed = await call("confirm-farmer", { candidate_number: 1 });
@@ -198,26 +198,26 @@ describe("agente de ayuda: permisos", () => {
     assert.ok(contact.consent_at);
   });
 
-  it("si no da permiso de guardar, no se evalúa ni se guarda nada", async () => {
+  it("without permission to save, nothing is assessed or saved", async () => {
     const { session_id, call } = newCall();
     await call("resolve-farmer", { caller_phone: "+12025550107" });
     await call("confirm-farmer", { candidate_number: 1 });
     await call("record-consent", { reports: false });
-    assert.equal((await call("assess-observation", { user_statement: "manchas" })).disposition, "declined");
-    assert.equal((await call("submit-report", { user_statement: "manchas", completeness: "partial" })).registered, false);
+    assert.equal((await call("assess-observation", { user_statement: "spots" })).disposition, "declined");
+    assert.equal((await call("submit-report", { user_statement: "spots", completeness: "partial" })).registered, false);
     assert.equal(reportsOf(session_id).length, 0);
   });
 
-  it("llamada cortada sin submit_report: guarda lo descrito como parcial, una sola vez", async () => {
+  it("call dropped without submit_report: saves what was described as partial, only once", async () => {
     const { session_id, call } = newCall();
     await call("resolve-farmer", { caller_phone: "+12025550105" });
     await call("confirm-farmer", { candidate_number: 1 });
     await call("get-plot-context");
     await call("record-consent", { reports: true });
-    await call("assess-observation", { user_statement: "Las hojas tienen polvo naranja", symptoms: ["polvo naranja en el envés"] });
+    await call("assess-observation", { user_statement: "The leaves have orange powder", symptoms: ["orange powder on the underside"] });
 
     await tools.sweep();
-    assert.equal(reportsOf(session_id).length, 0, "aún dentro del plazo");
+    assert.equal(reportsOf(session_id).length, 0, "still within the window");
     clock += 16 * MINUTE;
     await tools.sweep();
     await tools.sweep();
@@ -225,12 +225,12 @@ describe("agente de ayuda: permisos", () => {
     assert.equal(reports.length, 1);
     assert.equal(reports[0]?.completeness, "partial");
     assert.equal(reports[0]?.plot_id, "plot_demo_05");
-    assert.equal(reports[0]?.user_statement, "Las hojas tienen polvo naranja");
+    assert.equal(reports[0]?.user_statement, "The leaves have orange powder");
   });
 });
 
-describe("agente de ayuda: rutas", () => {
-  it("exigen el secreto de las herramientas y validan parámetros", async () => {
+describe("help agent: routes", () => {
+  it("require the tool secret and validate parameters", async () => {
     const post = (path: string, body: unknown, auth?: string) =>
       fetch(`${commsUrl}/v1/tools/${path}`, {
         method: "POST",
@@ -238,7 +238,7 @@ describe("agente de ayuda: rutas", () => {
         body: JSON.stringify(body),
       });
     assert.equal((await post("resolve-farmer", { session_id: "s", caller_phone: "+12025550101" })).status, 401);
-    assert.equal((await post("resolve-farmer", { session_id: "s", caller_phone: "+12025550101" }, "otro-secreto-0123456789")).status, 401);
+    assert.equal((await post("resolve-farmer", { session_id: "s", caller_phone: "+12025550101" }, "another-secret-0123456789")).status, 401);
     const invalid = await post("confirm-farmer", { session_id: "s", candidate_number: 0 }, TOOL_SECRET);
     assert.equal(invalid.status, 422);
     assert.equal(((await invalid.json()) as { error: { code: string } }).error.code, "VALIDATION_ERROR");

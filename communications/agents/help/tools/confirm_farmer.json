@@ -1,14 +1,14 @@
 {
   "type": "webhook",
   "name": "confirm_farmer",
-  "description": "Confirma con quién hablas después de que la persona lo dijo. Devuelve sus parcelas numeradas y qué permisos falta preguntar.",
+  "description": "Confirms who you're speaking with after the person said so. Returns their numbered plots and which permissions are still to be asked.",
   "response_timeout_secs": 10,
   "api_schema": {
-    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/confirm-farmer",
+    "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/confirm-farmer",
     "method": "POST",
     "request_headers": {
       "Authorization": {
-        "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET"
+        "secret_id": "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET"
       }
     },
     "request_body_schema": {
@@ -24,7 +24,7 @@
         },
         "candidate_number": {
           "type": "integer",
-          "description": "Número de la persona en la lista de resolve_farmer (1 = la primera)"
+          "description": "Number of the person in resolve_farmer's list (1 = the first)"
         }
       }
     }

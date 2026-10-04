@@ -1,12 +1,11 @@
 /**
- * Llamada saliente con un agente de ElevenLabs a través del número Twilio
- * importado en ElevenLabs (`POST /v1/convai/twilio/outbound-call`). Las
- * variables dinámicas llegan al prompt y a las herramientas del agente como
- * `{{nombre}}`.
+ * Outbound call with an ElevenLabs agent through the Twilio number imported
+ * into ElevenLabs (`POST /v1/convai/twilio/outbound-call`). The dynamic
+ * variables reach the agent's prompt and tools as `{{name}}`.
  *
- * Sin grabación (sección 17). Un timeout o error de red es ambiguo: la
- * llamada pudo salir, así que no se reintenta a ciegas. Sin credenciales se
- * usa el stub (como el `status: "stubbed"` de `placeCall` en Marco).
+ * No recording (section 17). A timeout or network error is ambiguous: the
+ * call may have gone out, so it is never blindly retried. Without credentials
+ * the stub is used (like `placeCall`'s `status: "stubbed"` in Marco).
  */
 import { randomUUID } from "node:crypto";
 
@@ -14,7 +13,7 @@ export type DynamicVariables = Record<string, string | number | boolean>;
 
 export type PlaceCallResult =
   | { ok: true; conversation_id: string | null; call_sid: string | null; stubbed: boolean }
-  /** rejected: ElevenLabs respondió con error. ambiguous: no se sabe si la llamada salió. */
+  /** rejected: ElevenLabs answered with an error. ambiguous: unknown whether the call went out. */
   | { ok: false; kind: "rejected" | "ambiguous"; code: string; retryable: boolean };
 
 export interface OutboundCaller {
@@ -24,7 +23,7 @@ export interface OutboundCaller {
 export interface ElevenLabsCallerOptions {
   apiKey: string;
   agentId: string;
-  /** ID del número Twilio importado en ElevenLabs (no el número en sí). */
+  /** ID of the Twilio number imported into ElevenLabs (not the number itself). */
   agentPhoneNumberId: string;
   baseUrl?: string;
   timeoutMs?: number;
@@ -63,7 +62,7 @@ export class ElevenLabsOutboundCaller implements OutboundCaller {
     try {
       payload = (await response.json()) as typeof payload;
     } catch {
-      // Cuerpo ilegible: si el estado fue 2xx no sabemos si la llamada salió.
+      // Unreadable body: with a 2xx status we don't know whether the call went out.
       if (response.ok) return { ok: false, kind: "ambiguous", code: "INVALID_PROVIDER_RESPONSE", retryable: false };
     }
 
@@ -84,10 +83,10 @@ export class ElevenLabsOutboundCaller implements OutboundCaller {
   }
 }
 
-/** Registra las llamadas en memoria; no llama a nadie. */
+/** Records calls in memory; calls nobody. */
 export class StubOutboundCaller implements OutboundCaller {
   readonly calls: { to: string; dynamicVariables: DynamicVariables; conversation_id: string }[] = [];
-  /** Resultados forzados para pruebas, en orden. */
+  /** Forced results for tests, in order. */
   readonly queued: PlaceCallResult[] = [];
 
   async placeCall({ to, dynamicVariables }: { to: string; dynamicVariables: DynamicVariables }): Promise<PlaceCallResult> {

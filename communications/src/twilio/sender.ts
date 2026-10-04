@@ -1,18 +1,18 @@
 /**
- * Envío de SMS salientes, adaptado de Marco (`notifications/sendSms.ts`).
- * Devuelve el `sid` como `provider_reference` y el estado inicial del
- * proveedor. Un timeout o error de red es ambiguo: no se reenvía a ciegas
- * (sección 11); quien llama concilia antes de volver a enviar.
+ * Outbound SMS sending, adapted from Marco (`notifications/sendSms.ts`).
+ * Returns the `sid` as `provider_reference` and the provider's initial
+ * status. A timeout or network error is ambiguous: never blindly resent
+ * (section 11); the caller reconciles before sending again.
  *
- * Sin credenciales se usa el stub (como el `status: "stubbed"` de Marco),
- * para probar el flujo sin créditos ni teléfonos reales.
+ * Without credentials the stub is used (like Marco's `status: "stubbed"`),
+ * to test the flow without credits or real phones.
  */
 import { randomUUID } from "node:crypto";
 import twilio from "twilio";
 
 export type SendResult =
   | { ok: true; provider_reference: string; provider_status: string; stubbed: boolean }
-  /** rejected: el proveedor respondió con error. ambiguous: no se sabe si salió. */
+  /** rejected: the provider answered with an error. ambiguous: unknown whether it went out. */
   | { ok: false; kind: "rejected" | "ambiguous"; code: string; retryable: boolean };
 
 export interface SmsSender {
@@ -23,12 +23,12 @@ export interface TwilioSmsSenderOptions {
   accountSid: string;
   authToken: string;
   from: string;
-  /** `${PUBLIC_BASE_URL}/v1/webhooks/twilio/status`, cuando exista ese webhook. */
+  /** `${PUBLIC_BASE_URL}/v1/webhooks/twilio/status`, once that webhook exists. */
   statusCallbackUrl: string | null;
   timeoutMs?: number;
 }
 
-/** Códigos de Twilio que no se reintentan: número inválido, no móvil o dado de baja (STOP). */
+/** Twilio codes that are never retried: invalid number, not mobile or opted out (STOP). */
 const PERMANENT_TWILIO_CODES = new Set([21211, 21214, 21408, 21610, 21612, 21614]);
 
 export class TwilioSmsSender implements SmsSender {
@@ -62,7 +62,7 @@ export class TwilioSmsSender implements SmsSender {
   }
 }
 
-/** Registra los mensajes en memoria; no envía nada. */
+/** Records messages in memory; sends nothing. */
 export class StubSmsSender implements SmsSender {
   readonly sent: { to: string; body: string; provider_reference: string }[] = [];
   next: SendResult | null = null;

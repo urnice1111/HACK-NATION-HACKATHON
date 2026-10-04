@@ -1,14 +1,14 @@
 {
   "type": "webhook",
   "name": "resolve_farmer",
-  "description": "Busca quién llama a partir del número del teléfono. Devuelve solo nombres numerados para confirmar con la persona. Llamar al empezar la llamada.",
+  "description": "Looks up who is calling from the phone number. Returns only numbered names to confirm with the person. Call it at the start of the call.",
   "response_timeout_secs": 10,
   "api_schema": {
-    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/resolve-farmer",
+    "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/resolve-farmer",
     "method": "POST",
     "request_headers": {
       "Authorization": {
-        "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET"
+        "secret_id": "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET"
       }
     },
     "request_body_schema": {

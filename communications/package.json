@@ -2,7 +2,7 @@
   "name": "communications",
   "version": "0.1.0",
   "private": true,
-  "description": "Integrante 1: adaptadores Twilio/ElevenLabs, sesiones, entrega y seguimiento del MVP agrícola",
+  "description": "Member 1: Twilio/ElevenLabs adapters, sessions, delivery and follow-up for the agriculture MVP",
   "type": "module",
   "engines": {
     "node": ">=22"

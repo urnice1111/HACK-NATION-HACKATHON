@@ -1,16 +1,16 @@
 /**
- * Los agentes de ElevenLabs viven en la cuenta (se crean y ajustan en el panel; ver
- * agents/README.md). Comunicaciones solo los referencia por ID y, antes de usarlos,
- * comprueba que estén configurados como el código espera:
+ * The ElevenLabs agents live in the account (created and tuned in the dashboard; see
+ * agents/README.md). Communications only references them by ID and, before using them,
+ * checks they are configured the way the code expects:
  *
- *  - idioma español, sin grabación de audio y transcripciones 30 días como máximo (sección 17);
- *  - las herramientas que necesita cada agente, apuntando a PUBLIC_BASE_URL con el
- *    secreto de las herramientas y con parámetros que las rutas `/v1/tools/*` aceptan;
- *  - `session_id` y los IDs salen de variables, nunca del modelo;
- *  - el prompt solo usa variables que comunicaciones envía;
- *  - el número de ayuda contesta con el agente de ayuda y el de seguimiento admite salientes.
+ *  - English language, no audio recording and transcripts kept 30 days at most (section 17);
+ *  - the tools each agent needs, pointing at PUBLIC_BASE_URL with the tool secret and
+ *    with parameters the `/v1/tools/*` routes accept;
+ *  - `session_id` and the IDs come from variables, never from the model;
+ *  - the prompt only uses variables communications sends;
+ *  - the help number answers with the help agent and the follow-up number allows outbound calls.
  *
- * También genera la copia de referencia que `npm run agents:pull` guarda en agents/.
+ * It also builds the reference copy that `npm run agents:pull` saves into agents/.
  */
 import { z } from "zod";
 import { FOLLOWUP_DYNAMIC_VARIABLES } from "../followups/dispatcher.ts";
@@ -26,16 +26,16 @@ import {
 
 export type AgentRole = "help" | "followup";
 
-/** Lo que cada agente necesita de la cuenta para funcionar con este código. */
+/** What each agent needs from the account to work with this code. */
 export const AGENT_SPECS: Record<AgentRole, { label: string; sessionVariable: string; tools: string[]; variables: readonly string[] }> = {
   help: {
-    label: "agente de ayuda",
+    label: "help agent",
     sessionVariable: "system__conversation_id",
     tools: ["resolve_farmer", "confirm_farmer", "get_plot_context", "record_consent", "assess_observation", "submit_report"],
     variables: [],
   },
   followup: {
-    label: "agente de seguimiento",
+    label: "follow-up agent",
     sessionVariable: "session_id",
     tools: ["submit_followup", "assess_observation", "submit_report"],
     variables: FOLLOWUP_DYNAMIC_VARIABLES,
@@ -52,7 +52,7 @@ const TOOL_INPUTS: Record<string, z.ZodObject> = {
   submit_followup: SubmitFollowupInput,
 };
 
-// --- Formas de la API de ElevenLabs (solo lo que se valida; el resto se ignora) ---
+// --- ElevenLabs API shapes (only what is validated; the rest is ignored) ---
 
 export interface ToolProperty {
   type?: string | null;
@@ -133,7 +133,7 @@ export type AgentRecord = z.infer<typeof AgentRecord>;
 export type PhoneNumberRecord = z.infer<typeof PhoneNumberRecord>;
 
 export class AgentsApiError extends Error {
-  /** null = no hubo respuesta (red o timeout). */
+  /** null = no response (network or timeout). */
   constructor(readonly status: number | null, message: string) {
     super(message);
   }
@@ -144,7 +144,7 @@ export interface AgentsApi {
   getPhoneNumber(phoneNumberId: string): Promise<PhoneNumberRecord>;
 }
 
-/** Lectura de la cuenta de ElevenLabs. Solo necesita permisos de lectura de agentes y números. */
+/** Reads the ElevenLabs account. Only needs read access to agents and phone numbers. */
 export class ElevenLabsAgentsApi implements AgentsApi {
   constructor(
     private readonly apiKey: string,
@@ -165,16 +165,16 @@ export class ElevenLabsAgentsApi implements AgentsApi {
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, { headers: { "xi-api-key": this.apiKey }, signal: AbortSignal.timeout(10_000) });
     } catch {
-      throw new AgentsApiError(null, "ElevenLabs no respondió");
+      throw new AgentsApiError(null, "ElevenLabs did not respond");
     }
-    if (!response.ok) throw new AgentsApiError(response.status, `ElevenLabs respondió ${response.status} en ${path}`);
+    if (!response.ok) throw new AgentsApiError(response.status, `ElevenLabs returned ${response.status} for ${path}`);
     const parsed = schema.safeParse(await response.json());
-    if (!parsed.success) throw new AgentsApiError(response.status, `respuesta inesperada de ElevenLabs en ${path}`);
+    if (!parsed.success) throw new AgentsApiError(response.status, `unexpected ElevenLabs response for ${path}`);
     return parsed.data;
   }
 }
 
-// --- Validación ---
+// --- Validation ---
 
 function isSecretRef(value: unknown): boolean {
   return typeof value === "object" && value !== null && typeof (value as { secret_id?: unknown }).secret_id === "string" && (value as { secret_id: string }).secret_id.length > 0;
@@ -190,13 +190,13 @@ function dynamicVariablesIn(property: ToolProperty): string[] {
   return [...own, ...nested, ...(property.items ? dynamicVariablesIn(property.items) : [])];
 }
 
-/** Problemas de una herramienta webhook. Sin `publicBaseUrl` no se comprueba el dominio (copia de referencia). */
+/** Problems with a webhook tool. Without `publicBaseUrl` the domain isn't checked (reference copy). */
 export function toolProblems(tool: AgentTool, role: AgentRole, publicBaseUrl: string | null): string[] {
   const problems: string[] = [];
   const add = (message: string) => problems.push(`${tool.name}: ${message}`);
   const input = TOOL_INPUTS[tool.name];
-  if (!input) return [`${tool.name}: comunicaciones no tiene esta herramienta`];
-  if (tool.type !== "webhook" || !tool.api_schema) return [`${tool.name}: debe ser una herramienta webhook`];
+  if (!input) return [`${tool.name}: communications doesn't have this tool`];
+  if (tool.type !== "webhook" || !tool.api_schema) return [`${tool.name}: must be a webhook tool`];
 
   const api = tool.api_schema;
   const expectedPath = `/v1/tools/${tool.name.replaceAll("_", "-")}`;
@@ -204,68 +204,68 @@ export function toolProblems(tool: AgentTool, role: AgentRole, publicBaseUrl: st
   try {
     url = new URL(api.url);
   } catch {
-    add(`URL inválida (${api.url})`);
+    add(`invalid URL (${api.url})`);
   }
-  if (url && url.pathname !== expectedPath) add(`la URL debe terminar en ${expectedPath}`);
-  if (url && publicBaseUrl && url.origin !== new URL(publicBaseUrl).origin) add(`la URL apunta a ${url.origin}, no a PUBLIC_BASE_URL (${new URL(publicBaseUrl).origin})`);
-  if ((api.method ?? "").toUpperCase() !== "POST") add("el método debe ser POST");
-  if (!isSecretRef(api.request_headers?.Authorization)) add("falta la cabecera Authorization con el secreto \"Bearer <ELEVENLABS_TOOL_SECRET>\"");
+  if (url && url.pathname !== expectedPath) add(`the URL must end in ${expectedPath}`);
+  if (url && publicBaseUrl && url.origin !== new URL(publicBaseUrl).origin) add(`the URL points to ${url.origin}, not to PUBLIC_BASE_URL (${new URL(publicBaseUrl).origin})`);
+  if ((api.method ?? "").toUpperCase() !== "POST") add("the method must be POST");
+  if (!isSecretRef(api.request_headers?.Authorization)) add("missing the Authorization header with the secret \"Bearer <ELEVENLABS_TOOL_SECRET>\"");
 
   const body = api.request_body_schema;
   const properties = body?.properties ?? {};
   const accepted = Object.keys(input.shape);
-  for (const key of Object.keys(properties)) if (!accepted.includes(key)) add(`el parámetro ${key} no lo acepta comunicaciones`);
+  for (const key of Object.keys(properties)) if (!accepted.includes(key)) add(`communications doesn't accept the parameter ${key}`);
   for (const key of accepted.filter((k) => !input.shape[k]!.safeParse(undefined).success)) {
-    if (!properties[key]?.dynamic_variable && !body?.required?.includes(key)) add(`el parámetro ${key} es obligatorio`);
+    if (!properties[key]?.dynamic_variable && !body?.required?.includes(key)) add(`the parameter ${key} is required`);
   }
   const sessionVariable = properties.session_id?.dynamic_variable;
   if (sessionVariable !== AGENT_SPECS[role].sessionVariable) {
-    add(`session_id debe venir de la variable dinámica ${AGENT_SPECS[role].sessionVariable}${sessionVariable ? ` (hoy ${sessionVariable})` : ""}`);
+    add(`session_id must come from the dynamic variable ${AGENT_SPECS[role].sessionVariable}${sessionVariable ? ` (currently ${sessionVariable})` : ""}`);
   }
   for (const variable of body ? dynamicVariablesIn(body) : []) {
-    if (!allowedVariable(variable, role)) add(`usa la variable {{${variable}}}, que comunicaciones no envía a este agente`);
+    if (!allowedVariable(variable, role)) add(`uses the variable {{${variable}}}, which communications doesn't send to this agent`);
   }
   return problems;
 }
 
-/** Problemas de configuración de un agente leído de la cuenta. */
+/** Configuration problems of an agent read from the account. */
 export function agentProblems(agent: AgentRecord, role: AgentRole, publicBaseUrl: string | null): string[] {
   const spec = AGENT_SPECS[role];
   const problems: string[] = [];
   const config = agent.conversation_config.agent;
-  if (!config.language?.startsWith("es")) problems.push(`idioma "${config.language ?? "?"}"; debe ser español (es)`);
-  if (agent.platform_settings?.privacy?.record_voice !== false) problems.push("graba audio; desactívalo en Privacy (sección 17: sin grabación)");
+  if (!config.language?.startsWith("en")) problems.push(`language "${config.language ?? "?"}"; must be English (en)`);
+  if (agent.platform_settings?.privacy?.record_voice !== false) problems.push("records audio; turn it off in Privacy (section 17: no recording)");
   const retention = agent.platform_settings?.privacy?.retention_days;
   if (retention == null || retention < 0 || retention > 30) {
-    problems.push(`guarda las conversaciones ${retention == null || retention < 0 ? "para siempre" : `${retention} días`}; ponlo en 30 días o menos en Privacy (sección 17)`);
+    problems.push(`keeps conversations ${retention == null || retention < 0 ? "forever" : `${retention} days`}; set it to 30 days or less in Privacy (section 17)`);
   }
 
   const tools = config.prompt.tools ?? [];
   for (const name of spec.tools) {
     const tool = tools.find((t) => t.name === name);
-    if (!tool) problems.push(`falta la herramienta ${name}`);
+    if (!tool) problems.push(`missing the tool ${name}`);
     else problems.push(...toolProblems(tool, role, publicBaseUrl));
   }
-  if (!tools.some((t) => t.name === "end_call")) problems.push("falta la herramienta de sistema end_call (colgar)");
+  if (!tools.some((t) => t.name === "end_call")) problems.push("missing the end_call system tool (hang up)");
 
   const text = `${config.prompt.prompt ?? ""}\n${config.first_message ?? ""}`;
   for (const [, variable] of text.matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)) {
-    if (!allowedVariable(variable!, role)) problems.push(`el prompt usa {{${variable}}}, que comunicaciones no envía`);
+    if (!allowedVariable(variable!, role)) problems.push(`the prompt uses {{${variable}}}, which communications doesn't send`);
   }
   return [...new Set(problems)].map((p) => `${spec.label} (${agent.name}): ${p}`);
 }
 
-/** Un número importado en ElevenLabs y la variable de `.env` de la que salió su ID (para los mensajes). */
+/** A number imported into ElevenLabs and the `.env` variable its ID came from (for messages). */
 export interface PhoneConfig {
   id: string | null;
-  /** Número E.164 esperado, si está en `.env`. */
+  /** Expected E.164 number, if set in `.env`. */
   e164: string | null;
   variable: string;
 }
 
 /**
- * Números de cada agente. Con dos números: `HELP_AGENT_TELEPHONE_ID` contesta las entrantes y
- * `FOLLOW_UP_AGENT_PHONE_ID` hace las salientes. Con uno solo, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` hace ambas.
+ * Each agent's number. With two numbers: `HELP_AGENT_TELEPHONE_ID` answers inbound calls and
+ * `FOLLOW_UP_AGENT_PHONE_ID` places outbound ones. With one, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` does both.
  */
 export function phonesFromEnv(get: (name: string) => string | null | undefined): Record<AgentRole, PhoneConfig> {
   const shared = get("ELEVENLABS_AGENT_PHONE_NUMBER_ID") || null;
@@ -284,9 +284,9 @@ export interface AgentsConfig {
 }
 
 export interface AgentsCheck {
-  /** Configuración incorrecta: hay que corregirla en el panel. */
+  /** Wrong configuration: must be fixed in the dashboard. */
   problems: string[];
-  /** No se pudo consultar (red, permisos): no prueba que esté mal. */
+  /** Couldn't be read (network, permissions): doesn't prove it's wrong. */
   unreachable: string[];
   agents: Partial<Record<AgentRole, AgentRecord>>;
 }
@@ -294,24 +294,24 @@ export interface AgentsCheck {
 function phoneProblems(role: AgentRole, number: PhoneNumberRecord, phone: PhoneConfig, config: AgentsConfig): string[] {
   const problems: string[] = [];
   if (phone.e164 && number.phone_number && number.phone_number !== phone.e164) {
-    problems.push(`${phone.variable} es ${number.phone_number}, no ${phone.e164}`);
+    problems.push(`${phone.variable} is ${number.phone_number}, not ${phone.e164}`);
   }
   if (role === "help") {
-    if (number.supports_inbound === false) problems.push("no admite llamadas entrantes");
+    if (number.supports_inbound === false) problems.push("doesn't support inbound calls");
     if (config.helpAgentId && number.assigned_agent?.agent_id !== config.helpAgentId) {
-      problems.push("las llamadas entrantes no las contesta el agente de ayuda (asígnalo en Phone Numbers)");
+      problems.push("inbound calls aren't answered by the help agent (assign it in Phone Numbers)");
     }
   } else {
-    if (number.supports_outbound === false) problems.push("no admite llamadas salientes");
-    // Si el agricultor devuelve la llamada al número que lo llamó, el de seguimiento contestaría sin sus variables.
+    if (number.supports_outbound === false) problems.push("doesn't support outbound calls");
+    // If the farmer calls back the number that called them, the follow-up agent would answer without its variables.
     if (phone.id !== config.phones.help.id && config.followupAgentId && number.assigned_agent?.agent_id === config.followupAgentId) {
-      problems.push("contesta las entrantes con el agente de seguimiento, que sin sus variables no funciona; asígnale el agente de ayuda para quien devuelva la llamada");
+      problems.push("answers inbound calls with the follow-up agent, which doesn't work without its variables; assign the help agent for people who call back");
     }
   }
-  return problems.map((p) => `número de ${role === "help" ? "ayuda" : "seguimiento"}: ${p}`);
+  return problems.map((p) => `${role === "help" ? "help" : "follow-up"} number: ${p}`);
 }
 
-/** Lee de la cuenta los agentes y los números configurados y los valida contra lo que espera el código. */
+/** Reads the configured agents and numbers from the account and validates them against what the code expects. */
 export async function checkAgents(api: AgentsApi, config: AgentsConfig): Promise<AgentsCheck> {
   const result: AgentsCheck = { problems: [], unreachable: [], agents: {} };
   const ids: [AgentRole, string | null, string][] = [
@@ -320,7 +320,7 @@ export async function checkAgents(api: AgentsApi, config: AgentsConfig): Promise
   ];
   for (const [role, id, variable] of ids) {
     if (!id) {
-      result.problems.push(`${AGENT_SPECS[role].label}: falta ${variable}`);
+      result.problems.push(`${AGENT_SPECS[role].label}: ${variable} is missing`);
       continue;
     }
     try {
@@ -328,32 +328,32 @@ export async function checkAgents(api: AgentsApi, config: AgentsConfig): Promise
       result.agents[role] = agent;
       result.problems.push(...agentProblems(agent, role, config.publicBaseUrl));
     } catch (error) {
-      if (error instanceof AgentsApiError && error.status === 404) result.problems.push(`${AGENT_SPECS[role].label}: no existe ${variable}=${id} en la cuenta`);
+      if (error instanceof AgentsApiError && error.status === 404) result.problems.push(`${AGENT_SPECS[role].label}: ${variable}=${id} doesn't exist in the account`);
       else result.unreachable.push(`${AGENT_SPECS[role].label}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   for (const role of ["help", "followup"] as const) {
     const phone = config.phones[role];
-    const label = `número de ${role === "help" ? "ayuda" : "seguimiento"}`;
+    const label = `${role === "help" ? "help" : "follow-up"} number`;
     if (!phone.id) {
-      result.problems.push(`${label}: falta ${phone.variable}`);
+      result.problems.push(`${label}: ${phone.variable} is missing`);
       continue;
     }
     try {
       result.problems.push(...phoneProblems(role, await api.getPhoneNumber(phone.id), phone, config));
     } catch (error) {
-      if (error instanceof AgentsApiError && error.status === 404) result.problems.push(`${label}: no existe ${phone.variable}=${phone.id} en la cuenta`);
+      if (error instanceof AgentsApiError && error.status === 404) result.problems.push(`${label}: ${phone.variable}=${phone.id} doesn't exist in the account`);
       else result.unreachable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return result;
 }
 
-// --- Copia de referencia (npm run agents:pull) ---
+// --- Reference copy (npm run agents:pull) ---
 
-export const URL_PLACEHOLDER = "https://TU-DOMINIO-PUBLICO";
-const SECRET_PLACEHOLDER = { secret_id: "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET" };
+export const URL_PLACEHOLDER = "https://YOUR-PUBLIC-DOMAIN";
+const SECRET_PLACEHOLDER = { secret_id: "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET" };
 
 function cleanProperty(property: ToolProperty): ToolProperty {
   const out: ToolProperty = {};
@@ -367,7 +367,7 @@ function cleanProperty(property: ToolProperty): ToolProperty {
   return out;
 }
 
-/** Archivos de la copia de referencia de un agente, sin IDs de secretos ni el dominio público. */
+/** Files of an agent's reference copy, without secret IDs or the public domain. */
 export function snapshotFiles(agent: AgentRecord): Record<string, string> {
   const config = agent.conversation_config.agent;
   const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;

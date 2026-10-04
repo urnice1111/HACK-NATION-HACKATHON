@@ -3,16 +3,16 @@ import { describe, it } from "node:test";
 
 import { canContact, isWithinAllowedHours } from "../src/policy/outreach.ts";
 
-const TZ = "America/Mexico_City"; // UTC-6, sin horario de verano desde 2022
+const TZ = "America/Mexico_City"; // UTC-6, no daylight saving time since 2022
 
-describe("horario permitido (hora local del agricultor)", () => {
-  it("08:00–19:00 por defecto", () => {
+describe("allowed hours (farmer's local time)", () => {
+  it("08:00–19:00 by default", () => {
     assert.equal(isWithinAllowedHours(new Date("2026-10-03T14:00:00Z"), TZ, null), true); // 08:00
     assert.equal(isWithinAllowedHours(new Date("2026-10-03T13:59:00Z"), TZ, null), false); // 07:59
     assert.equal(isWithinAllowedHours(new Date("2026-10-04T01:00:00Z"), TZ, null), false); // 19:00
   });
 
-  it("respeta el horario propio del contacto", () => {
+  it("respects the contact's own hours", () => {
     assert.equal(isWithinAllowedHours(new Date("2026-10-03T23:00:00Z"), TZ, { start: "10:00", end: "12:00" }), false);
   });
 });
@@ -28,11 +28,11 @@ describe("canContact", () => {
     demoAllowlist: new Set(["+12025550105"]),
   };
 
-  it("permite con consentimiento, en horario y en lista blanca", () => {
+  it("allows with consent, within hours and on the allowlist", () => {
     assert.deepEqual(canContact(base), { ok: true });
   });
 
-  it("el consentimiento va primero; en demo la lista vacía bloquea a todos", () => {
+  it("consent comes first; in demo an empty list blocks everyone", () => {
     assert.deepEqual(canContact({ ...base, consent: false }), { ok: false, reason: "no_consent" });
     assert.deepEqual(canContact({ ...base, demoAllowlist: new Set() }), { ok: false, reason: "not_allowlisted" });
     assert.deepEqual(canContact({ ...base, isDemo: false, demoAllowlist: new Set() }), { ok: true });
@@ -45,22 +45,22 @@ describe("DEMO_IGNORE_ALLOWED_HOURS", () => {
     timezone: TZ,
     allowed_hours: null,
     consent: true,
-    now: new Date("2026-10-04T04:00:00Z"), // 22:00 en México
+    now: new Date("2026-10-04T04:00:00Z"), // 22:00 in Mexico
     isDemo: true,
     demoAllowlist: new Set(["+12025550105"]),
   };
 
-  it("en demo se salta el horario", () => {
+  it("in demo it skips the allowed hours", () => {
     assert.deepEqual(canContact(night), { ok: false, reason: "outside_hours" });
     assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true }), { ok: true });
   });
 
-  it("no se salta el consentimiento ni la lista blanca", () => {
+  it("never skips consent or the allowlist", () => {
     assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true, consent: false }), { ok: false, reason: "no_consent" });
     assert.deepEqual(canContact({ ...night, ignoreAllowedHours: true, demoAllowlist: new Set() }), { ok: false, reason: "not_allowlisted" });
   });
 
-  it("fuera de demo no tiene efecto aunque llegue en true", () => {
+  it("outside demo it has no effect even if true", () => {
     assert.deepEqual(canContact({ ...night, isDemo: false, ignoreAllowedHours: true }), { ok: false, reason: "outside_hours" });
   });
 });

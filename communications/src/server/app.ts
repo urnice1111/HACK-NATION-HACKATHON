@@ -1,8 +1,8 @@
 /**
- * Servidor HTTP de comunicaciones:
- *  - Webhooks de proveedores: se autentican con la firma de cada proveedor, no con el token de operador.
- *  - Herramientas de los agentes de ElevenLabs (`/v1/tools/*`): secreto propio en `Authorization`.
- *  - `followup.due` del backend (`POST /v1/followups/{id}/dispatch`, PROPUESTO): token de servicio.
+ * Communications HTTP server:
+ *  - Provider webhooks: authenticated with each provider's signature, not with the operator token.
+ *  - ElevenLabs agent tools (`/v1/tools/*`): their own secret in `Authorization`.
+ *  - Backend `followup.due` (`POST /v1/followups/{id}/dispatch`, PROPOSED): service token.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { z } from "zod";
@@ -20,13 +20,13 @@ export interface CommsServerDeps {
   publicBaseUrl: string;
   twilioAuthToken: string;
   twilioPhoneNumber: string;
-  /** Otros números propios cuyos SMS también se atienden (los SMS salientes siempre salen de `twilioPhoneNumber`). */
+  /** Other numbers of ours whose SMS are also handled (outbound SMS always go from `twilioPhoneNumber`). */
   extraPhoneNumbers?: string[];
   conversation: SmsConversation;
-  /** Herramientas de voz; sin ellas (o sin secreto) las rutas `/v1/tools/*` responden 503. */
+  /** Voice tools; without them (or without the secret) the `/v1/tools/*` routes answer 503. */
   voiceTools?: VoiceTools;
   toolSecret?: string | null;
-  /** Despachador de seguimientos; sin él (o sin token) la ruta de `followup.due` responde 503. */
+  /** Follow-up dispatcher; without it (or without the token) the `followup.due` route answers 503. */
   dispatcher?: FollowupDispatcher;
   serviceToken?: string | null;
 }
@@ -37,12 +37,12 @@ const FollowupDueEvent = OutboxEvent.extend({
 });
 
 const TOOL_ROUTES: Record<string, (tools: VoiceTools, body: unknown) => Promise<ToolReply>> = {
-  // Agente de ayuda (llamada entrante).
+  // Help agent (inbound call).
   "/v1/tools/resolve-farmer": (tools, body) => tools.resolveFarmer(body),
   "/v1/tools/confirm-farmer": (tools, body) => tools.confirmFarmer(body),
   "/v1/tools/get-plot-context": (tools, body) => tools.getPlotContext(body),
   "/v1/tools/record-consent": (tools, body) => tools.recordConsent(body),
-  // Ambos agentes.
+  // Both agents.
   "/v1/tools/submit-followup": (tools, body) => tools.submitFollowup(body),
   "/v1/tools/assess-observation": (tools, body) => tools.assessObservation(body),
   "/v1/tools/submit-report": (tools, body) => tools.submitReport(body),
@@ -50,15 +50,15 @@ const TOOL_ROUTES: Record<string, (tools: VoiceTools, body: unknown) => Promise<
 
 export function createCommsServer(deps: CommsServerDeps): Server {
   const phoneLocks = new KeyedMutex();
-  /** TwiML ya contestado por MessageSid: un webhook repetido recibe la misma respuesta. */
+  /** TwiML already answered per MessageSid: a repeated webhook gets the same answer. */
   const processed = new BoundedMap<string, string>();
-  /** Eventos ya procesados (sección 11: cada consumidor deduplica por event_id). */
+  /** Events already processed (section 11: every consumer deduplicates by event_id). */
   const processedEvents = new BoundedMap<string, DispatchResult>();
 
   async function tool(req: IncomingMessage, res: ServerResponse, requestId: string, path: string): Promise<string> {
-    if (!deps.voiceTools || !deps.toolSecret) throw new HttpError(503, "NOT_CONFIGURED", "Herramientas de voz no configuradas");
+    if (!deps.voiceTools || !deps.toolSecret) throw new HttpError(503, "NOT_CONFIGURED", "Voice tools are not configured");
     if (!bearerMatches(headerValue(req, "authorization"), deps.toolSecret)) {
-      throw new HttpError(401, "UNAUTHORIZED", "Credenciales de la herramienta ausentes o inválidas");
+      throw new HttpError(401, "UNAUTHORIZED", "Missing or invalid tool credentials");
     }
     const reply = await TOOL_ROUTES[path]!(deps.voiceTools, await readJson(req));
     sendJson(res, reply.status, reply.body, { "X-Request-Id": requestId });
@@ -66,13 +66,13 @@ export function createCommsServer(deps: CommsServerDeps): Server {
   }
 
   async function followupDue(req: IncomingMessage, res: ServerResponse, requestId: string, followupId: string): Promise<string> {
-    if (!deps.dispatcher || !deps.serviceToken) throw new HttpError(503, "NOT_CONFIGURED", "Despachador de seguimientos no configurado");
+    if (!deps.dispatcher || !deps.serviceToken) throw new HttpError(503, "NOT_CONFIGURED", "Follow-up dispatcher is not configured");
     if (!bearerMatches(headerValue(req, "authorization"), deps.serviceToken)) {
-      throw new HttpError(401, "UNAUTHORIZED", "Credenciales de servicio ausentes o inválidas");
+      throw new HttpError(401, "UNAUTHORIZED", "Missing or invalid service credentials");
     }
     const parsed = FollowupDueEvent.safeParse(await readJson(req));
     if (!parsed.success || parsed.data.payload.followup_id !== followupId) {
-      throw new HttpError(422, "VALIDATION_ERROR", "Se esperaba un evento followup.due para este seguimiento", {
+      throw new HttpError(422, "VALIDATION_ERROR", "Expected a followup.due event for this follow-up", {
         details: [{ field: parsed.success ? "payload.followup_id" : "(body)", reason: parsed.success ? "mismatch" : "invalid" }],
       });
     }
@@ -97,7 +97,7 @@ export function createCommsServer(deps: CommsServerDeps): Server {
     const params = formParams(await readBody(req));
     const url = callbackUrl(deps.publicBaseUrl, req.url ?? "/");
     if (!isValidTwilioSignature(deps.twilioAuthToken, headerValue(req, "x-twilio-signature"), url, params)) {
-      throw new HttpError(403, "INVALID_SIGNATURE", "Firma de Twilio inválida");
+      throw new HttpError(403, "INVALID_SIGNATURE", "Invalid Twilio signature");
     }
 
     const messageSid = params.MessageSid;
@@ -110,7 +110,7 @@ export function createCommsServer(deps: CommsServerDeps): Server {
       return "ignored";
     }
 
-    // Un webhook repetido (mismo MessageSid) recibe la misma respuesta y no repite efectos.
+    // A repeated webhook (same MessageSid) gets the same answer and repeats no side effects.
     const twiml = await phoneLocks.run(from, async () => {
       const previous = processed.get(messageSid);
       if (previous) return { twiml: previous, replayed: true };
@@ -149,7 +149,7 @@ export function createCommsServer(deps: CommsServerDeps): Server {
       } else if (method === "POST" && (dispatchMatch = path.match(/^\/v1\/followups\/([A-Za-z0-9_-]+)\/dispatch$/))) {
         outcome = await followupDue(req, res, requestId, dispatchMatch[1]!);
       } else {
-        throw new HttpError(404, "NOT_FOUND", "Ruta inexistente");
+        throw new HttpError(404, "NOT_FOUND", "Route not found");
       }
     } catch (error) {
       const httpError = error instanceof HttpError ? error : new HttpError(500, "INTERNAL_ERROR", "Error interno", { retryable: true });

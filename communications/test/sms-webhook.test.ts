@@ -31,7 +31,7 @@ let followups: FollowupSmsFlow;
 let conversation: SmsConversation;
 const sender = new StubSmsSender();
 let clock = Date.parse("2026-10-03T23:00:00Z");
-/** Escenario del mock que se inyecta en las llamadas cuya ruta coincide. */
+/** Mock scenario injected into calls whose path matches. */
 let scenario: { path: RegExp; value: string } | null = null;
 let sidCounter = 0;
 const servers: Server[] = [];
@@ -75,7 +75,7 @@ before(async () => {
     writer,
     followups,
     isDemo: true,
-    defaultLanguage: "es",
+    defaultLanguage: "en",
     idleMs: 30 * 60 * 1000,
     now: () => new Date(clock),
   });
@@ -98,7 +98,7 @@ function nextSid(): string {
   return `SM${String(sidCounter).padStart(32, "0")}`;
 }
 
-/** Envía un SMS como Twilio: form-encoded y firmado con la URL pública. */
+/** Sends an SMS like Twilio: form-encoded and signed with the public URL. */
 async function sendSms(from: string, body: string, opts: { sid?: string; to?: string; signature?: string } = {}) {
   const params: Record<string, string> = {
     MessageSid: opts.sid ?? nextSid(),
@@ -127,44 +127,44 @@ function reportsFrom(firstSid: string) {
   return [...mockState.reports.values()].filter((r) => r.provider_reference === firstSid);
 }
 
-describe("webhook SMS: seguridad", () => {
-  it("firma inválida → 403 y no llama al backend", async () => {
+describe("SMS webhook: security", () => {
+  it("invalid signature → 403 and no backend call", async () => {
     const before = mockState.reports.size;
-    const res = await sendSms("+12025550101", "manchas", { signature: "firma-falsa" });
+    const res = await sendSms("+12025550101", "spots", { signature: "fake-signature" });
     assert.equal(res.status, 403);
     assert.match(res.text, /INVALID_SIGNATURE/);
     assert.equal(mockState.reports.size, before);
   });
 
-  it("SMS dirigido a otro número → se ignora sin respuesta", async () => {
-    const res = await sendSms("+12025550101", "hola", { to: "+12025550000" });
+  it("SMS addressed to another number → ignored without a reply", async () => {
+    const res = await sendSms("+12025550101", "hi", { to: "+12025550000" });
     assert.equal(res.status, 200);
     assert.equal(res.reply, null);
   });
 });
 
-describe("webhook SMS: conversación", () => {
-  it("número conocido: confirma identidad, pide consentimiento, pregunta y registra el reporte", async () => {
+describe("SMS webhook: conversation", () => {
+  it("known number: confirms identity, asks for consent, asks questions and records the report", async () => {
     const phone = "+12025550101";
-    const first = await sendSms(phone, "Tengo manchas en las hojas del cafe");
+    const first = await sendSms(phone, "I have spots on my coffee leaves");
     assert.equal(first.reply, sms.identify(["Rosa"]));
 
-    // Ya dio permiso de guardar reportes: solo se confirma este reporte.
+    // Report permission already granted: only this report is confirmed.
     assert.equal((await sendSms(phone, "1")).reply, sms.confirmReport);
 
-    // El asesor devuelve dos necesidades; se pregunta una por turno, la de mayor prioridad.
-    const weather = await sendSms(phone, "SI");
-    assert.match(weather.reply!, /clima/);
-    assert.equal(reportsFrom(first.sid).length, 0, "no se guarda antes de terminar");
+    // The advisor returns two needs; one is asked per turn, highest priority first.
+    const weather = await sendSms(phone, "Y");
+    assert.match(weather.reply!, /weather/);
+    assert.equal(reportsFrom(first.sid).length, 0, "nothing is saved before finishing");
 
-    const leaf = await sendSms(phone, "Ha llovido mucho");
-    assert.match(leaf.reply!, /parte de abajo de las hojas/);
-    assert.match(leaf.reply!, /1 polvo naranja o amarillo/);
+    const leaf = await sendSms(phone, "It has rained a lot");
+    assert.match(leaf.reply!, /underside of the leaves/);
+    assert.match(leaf.reply!, /1 orange or yellow powder/);
 
     const closing = await sendSms(phone, "1");
-    assert.match(closing.reply!, /no confirma ninguna enfermedad/);
-    assert.match(closing.reply!, /entiérralas/);
-    assert.match(closing.reply!, /un técnico confirmó/, "menciona el caso resuelto verificado");
+    assert.match(closing.reply!, /doesn't confirm any disease/);
+    assert.match(closing.reply!, /bury them/);
+    assert.match(closing.reply!, /a technician confirmed/, "mentions the verified resolved case");
     assert.ok(closing.reply!.endsWith(sms.saved));
 
     const [report] = reportsFrom(first.sid);
@@ -173,84 +173,84 @@ describe("webhook SMS: conversación", () => {
     assert.equal(report.plot_id, "plot_demo_01");
     assert.equal(report.completeness, "sufficient");
     assert.equal(report.observed_at, null);
-    assert.match(report.user_statement, /manchas[\s\S]*llovido/);
+    assert.match(report.user_statement, /spots[\s\S]*rained/);
     assert.ok(report.assessment_id);
   });
 
-  it("webhook duplicado: misma respuesta y un solo reporte", async () => {
+  it("duplicate webhook: same reply and a single report", async () => {
     const phone = "+12025550105";
-    const first = await sendSms(phone, "Veo hojas con manchas cafes");
+    const first = await sendSms(phone, "I see leaves with brown spots");
     await sendSms(phone, "1");
-    await sendSms(phone, "si");
-    await sendSms(phone, "no se");
-    const last = await sendSms(phone, "polvo naranja abajo");
-    const duplicate = await sendSms(phone, "polvo naranja abajo", { sid: last.sid });
+    await sendSms(phone, "yes");
+    await sendSms(phone, "dont know");
+    const last = await sendSms(phone, "orange powder underneath");
+    const duplicate = await sendSms(phone, "orange powder underneath", { sid: last.sid });
     assert.equal(duplicate.text, last.text);
     assert.equal(reportsFrom(first.sid).length, 1);
   });
 
-  it("teléfono compartido: solo nombres antes de confirmar; usa la parcela del elegido", async () => {
+  it("shared phone: names only before confirming; uses the chosen person's plot", async () => {
     const phone = "+12025550102";
-    const first = await sendSms(phone, "hola");
+    const first = await sendSms(phone, "hi");
     assert.equal(first.reply, sms.identify(["Tomás", "Lucía"]));
-    assert.doesNotMatch(first.reply!, /Parcela|plot_/);
+    assert.doesNotMatch(first.reply!, /Plot|plot_/);
 
     await sendSms(phone, "2");
-    await sendSms(phone, "si");
-    assert.match((await sendSms(phone, "hay manchas en muchas plantas")).reply!, /clima/);
-    assert.match((await sendSms(phone, "no sé")).reply!, /parte de abajo/);
-    await sendSms(phone, "polvo amarillo");
+    await sendSms(phone, "yes");
+    assert.match((await sendSms(phone, "there are spots on many plants")).reply!, /weather/);
+    assert.match((await sendSms(phone, "I don't know")).reply!, /underside/);
+    await sendSms(phone, "yellow powder");
     assert.equal(reportsFrom(first.sid)[0]?.plot_id, "plot_demo_03");
   });
 
-  it("número desconocido: registro mínimo sin parcela", async () => {
+  it("unknown number: minimal record without a plot", async () => {
     const phone = "+12025550177";
-    const first = await sendSms(phone, "Mis plantas se estan secando");
+    const first = await sendSms(phone, "My plants are drying out");
     assert.equal(first.reply, `${sms.unknownNumber} ${sms.consent}`);
-    const closing = await sendSms(phone, "si");
+    const closing = await sendSms(phone, "y");
     assert.equal(closing.reply, sms.savedUnknown);
     const [report] = reportsFrom(first.sid);
     assert.equal(report?.plot_id, null);
     assert.equal(report?.case_id, null);
   });
 
-  it("dice no ser el candidato: no se elige parcela", async () => {
+  it("says they are not the candidate: no plot is picked", async () => {
     const phone = "+12025550106";
-    const first = await sendSms(phone, "Hay plaga en el cafetal");
+    const first = await sendSms(phone, "There are pests in the coffee field");
     assert.equal((await sendSms(phone, "0")).reply, sms.consent);
-    await sendSms(phone, "si");
+    await sendSms(phone, "yes");
     assert.equal(reportsFrom(first.sid)[0]?.plot_id, null);
   });
 
-  it("sin consentimiento no se guarda nada", async () => {
+  it("nothing is saved without consent", async () => {
     const phone = "+12025550107";
-    const first = await sendSms(phone, "manchas en hojas");
+    const first = await sendSms(phone, "spots on leaves");
     await sendSms(phone, "1");
     assert.equal((await sendSms(phone, "NO")).reply, sms.consentDeclined);
     assert.equal(reportsFrom(first.sid).length, 0);
   });
 
-  it("\"no sé\" se trata como desconocido: el asesor sigue preguntando", async () => {
+  it("\"I don't know\" is treated as unknown: the advisor keeps asking", async () => {
     const phone = "+12025550104";
-    const first = await sendSms(phone, "manchas en las hojas");
+    const first = await sendSms(phone, "spots on the leaves");
     await sendSms(phone, "1");
-    await sendSms(phone, "si"); // pregunta del clima
-    await sendSms(phone, "ni idea"); // pregunta del envés
-    const next = await sendSms(phone, "5"); // opción "no sé"
-    assert.match(next.reply!, /color y forma son las manchas/);
+    await sendSms(phone, "yes"); // weather question
+    await sendSms(phone, "no idea"); // leaf underside question
+    const next = await sendSms(phone, "5"); // "don't know" option
+    assert.match(next.reply!, /color and shape are the spots/);
     const closing = await sendSms(phone, "1");
     assert.ok(closing.reply!.endsWith(sms.saved));
     assert.equal(reportsFrom(first.sid)[0]?.completeness, "sufficient");
   });
 
-  it("primera vez: pide los tres permisos por separado y los guarda", async () => {
+  it("first time: asks for the three permissions separately and saves them", async () => {
     const phone = "+12025550108";
-    const first = await sendSms(phone, "manchas en hojas");
+    const first = await sendSms(phone, "spots on leaves");
     assert.equal(first.reply, sms.identify(["Raúl"]));
     assert.equal((await sendSms(phone, "1")).reply, sms.consent);
-    assert.equal((await sendSms(phone, "si")).reply, sms.consentNotifications);
-    assert.equal((await sendSms(phone, "no")).reply, sms.consentFollowupCalls);
-    const closing = await sendSms(phone, "si"); // parcela sin contexto: el asesor deriva
+    assert.equal((await sendSms(phone, "y")).reply, sms.consentNotifications);
+    assert.equal((await sendSms(phone, "n")).reply, sms.consentFollowupCalls);
+    const closing = await sendSms(phone, "yes"); // plot without context: the advisor refers
     assert.ok(closing.reply!.startsWith(sms.refer));
     assert.ok(closing.reply!.endsWith(sms.saved));
 
@@ -262,7 +262,7 @@ describe("webhook SMS: conversación", () => {
     assert.ok(contact.consent_at);
   });
 
-  it("STOP: no contesta (Twilio responde) pero revoca en el backend", async () => {
+  it("STOP: no reply (Twilio answers) but revokes in the backend", async () => {
     const res = await sendSms("+12025550108", "STOP");
     assert.equal(res.reply, null);
     await writer.drain();
@@ -272,9 +272,9 @@ describe("webhook SMS: conversación", () => {
   });
 });
 
-describe("webhook SMS: BAJA", () => {
-  it("revoca avisos y seguimientos, no el permiso de reportar", async () => {
-    const res = await sendSms("+12025550102", "Baja");
+describe("SMS webhook: ALERTS OFF", () => {
+  it("revokes alerts and follow-ups, not the permission to report", async () => {
+    const res = await sendSms("+12025550102", "Alerts off");
     assert.equal(res.reply, sms.optedOut);
     const contact = mockState.contacts.find((c) => c.id === "contact_demo_02")!;
     assert.equal(contact.notification_consent, false);
@@ -282,19 +282,19 @@ describe("webhook SMS: BAJA", () => {
     assert.equal(contact.report_consent, true);
   });
 
-  it("a mitad de un reporte: guarda lo recibido como parcial y confirma la baja", async () => {
+  it("halfway through a report: saves what was received as partial and confirms the opt-out", async () => {
     const phone = "+12025550101";
-    const first = await sendSms(phone, "manchas en el cafetal");
+    const first = await sendSms(phone, "spots in the coffee field");
     await sendSms(phone, "1");
-    await sendSms(phone, "si"); // pregunta del clima
-    const res = await sendSms(phone, "BAJA");
+    await sendSms(phone, "yes"); // weather question
+    const res = await sendSms(phone, "ALERTS OFF");
     assert.equal(res.reply, sms.optedOut);
     assert.equal(reportsFrom(first.sid)[0]?.completeness, "partial");
   });
 
-  it("backend caído: no afirma la baja y la reintenta", async () => {
+  it("backend down: doesn't claim the opt-out and retries it", async () => {
     scenario = { path: /\/v1\/consents\/revocations$/, value: "backend_unavailable" };
-    const res = await sendSms("+12025550104", "baja");
+    const res = await sendSms("+12025550104", "alerts off");
     assert.equal(res.reply, sms.optOutPending);
     scenario = null;
     await writer.drain();
@@ -302,41 +302,41 @@ describe("webhook SMS: BAJA", () => {
   });
 });
 
-describe("webhook SMS: fallos", () => {
-  it("asesor caído: lo dice y guarda el reporte sin evaluación", async () => {
+describe("SMS webhook: failures", () => {
+  it("advisor down: says so and saves the report without an assessment", async () => {
     const phone = "+12025550104";
-    const first = await sendSms(phone, "manchas en las hojas");
+    const first = await sendSms(phone, "spots on the leaves");
     await sendSms(phone, "1");
     scenario = { path: /\/v1\/assessments$/, value: "advisor_unavailable" };
-    const closing = await sendSms(phone, "si");
+    const closing = await sendSms(phone, "yes");
     assert.equal(closing.reply, `${sms.advisorFailed} ${sms.saved}`);
     const [report] = reportsFrom(first.sid);
     assert.equal(report?.assessment_id, null);
     assert.equal(report?.completeness, "partial");
   });
 
-  it("backend no guarda: no afirma registro y reintenta con la misma clave", async () => {
+  it("backend doesn't save: doesn't claim it was recorded and retries with the same key", async () => {
     const phone = "+12025550101";
-    const first = await sendSms(phone, "otra vez manchas");
+    const first = await sendSms(phone, "spots again");
     await sendSms(phone, "1");
-    await sendSms(phone, "si");
-    await sendSms(phone, "llovió");
+    await sendSms(phone, "yes");
+    await sendSms(phone, "it rained");
     scenario = { path: /\/v1\/reports$/, value: "backend_unavailable" };
-    const closing = await sendSms(phone, "polvo amarillo");
+    const closing = await sendSms(phone, "yellow powder");
     assert.ok(closing.reply!.endsWith(sms.notConfirmed));
-    assert.doesNotMatch(closing.reply!, /quedó registrado\.$/);
+    assert.doesNotMatch(closing.reply!, /has been recorded\.$/);
     assert.equal(reportsFrom(first.sid).length, 0);
 
-    scenario = null; // el backend se recupera antes del reintento
+    scenario = null; // the backend recovers before the retry
     await writer.drain();
     assert.equal(reportsFrom(first.sid).length, 1);
   });
 
-  it("conversación abandonada: guarda lo recibido como parcial", async () => {
+  it("abandoned conversation: saves what was received as partial", async () => {
     const phone = "+12025550105";
-    const first = await sendSms(phone, "las hojas tienen manchas");
+    const first = await sendSms(phone, "the leaves have spots");
     await sendSms(phone, "1");
-    await sendSms(phone, "si"); // queda esperando la respuesta del asesor
+    await sendSms(phone, "yes"); // left waiting for the advisor answer
     clock += 31 * 60 * 1000;
     await conversation.sweep();
     const [report] = reportsFrom(first.sid);
@@ -344,7 +344,7 @@ describe("webhook SMS: fallos", () => {
   });
 });
 
-describe("seguimiento por SMS (respaldo)", () => {
+describe("SMS follow-up (fallback)", () => {
   async function dueFollowup(id: string): Promise<FollowupListItem> {
     const list = await client.listFollowups(id === "followup_demo_05" ? "scheduled" : "no_response");
     assert.ok(list.ok);
@@ -357,7 +357,7 @@ describe("seguimiento por SMS (respaldo)", () => {
     return { ...item, contact: { ...item.contact, ...contact } };
   }
 
-  it("no envía sin consentimiento, fuera de horario ni a números fuera de la lista blanca", async () => {
+  it("doesn't send without consent, outside allowed hours or to numbers outside the allowlist", async () => {
     const item = await dueFollowup("followup_demo_05");
     const before = sender.sent.length;
     assert.deepEqual(await followups.start(withContact(item, { followup_call_consent: false })), { status: "skipped", reason: "no_consent" });
@@ -369,15 +369,15 @@ describe("seguimiento por SMS (respaldo)", () => {
     assert.equal(sender.sent.length, before);
   });
 
-  it("no pisa una conversación en curso", async () => {
+  it("doesn't step on an ongoing conversation", async () => {
     const item = await dueFollowup("followup_demo_05");
-    await sendSms("+12025550105", "veo manchas");
+    await sendSms("+12025550105", "I see spots");
     assert.deepEqual(await followups.start(item), { status: "skipped", reason: "busy" });
     await sendSms("+12025550105", "0");
-    await sendSms("+12025550105", "no"); // cierra la conversación sin guardar nada
+    await sendSms("+12025550105", "no"); // closes the conversation without saving anything
   });
 
-  it("resuelto: las respuestas se guardan como seguimiento y crean una resolución", async () => {
+  it("resolved: the replies are saved as a follow-up and create a resolution", async () => {
     const item = await dueFollowup("followup_demo_05");
     const started = await followups.start(item);
     assert.equal(started.status, "sent");
@@ -386,17 +386,17 @@ describe("seguimiento por SMS (respaldo)", () => {
     assert.equal(outbound.body, sms.followupIntro("Marta"));
 
     assert.equal((await sendSms("+12025550105", "4")).reply, sms.followupActions);
-    assert.equal((await sendSms("+12025550105", "Quité las hojas y las enterré")).reply, sms.followupWorked);
+    assert.equal((await sendSms("+12025550105", "I removed the leaves and buried them")).reply, sms.followupWorked);
     assert.equal((await sendSms("+12025550105", "1")).reply, sms.followupSaved("resolved"));
 
     assert.equal(mockState.followups.find((f) => f.id === "followup_demo_05")?.status, "responded");
     assert.equal(mockState.cases.find((c) => c.id === "case_demo_05")?.status, "resolved");
     const resolution = mockState.resolutions.find((r) => r.followup_id === "followup_demo_05");
-    assert.equal(resolution?.solution_statement, "Quité las hojas y las enterré");
+    assert.equal(resolution?.solution_statement, "I removed the leaves and buried them");
     assert.equal(resolution?.verification, "farmer_reported");
   });
 
-  it("sin respuesta en la ventana: registra no_response y nunca una resolución", async () => {
+  it("no reply within the window: records no_response and never a resolution", async () => {
     const item = await dueFollowup("followup_demo_06");
     assert.equal((await followups.start(item)).status, "sent");
     clock += 25 * 60 * 60 * 1000;

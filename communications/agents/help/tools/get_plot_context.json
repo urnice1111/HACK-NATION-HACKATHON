@@ -1,14 +1,14 @@
 {
   "type": "webhook",
   "name": "get_plot_context",
-  "description": "Fija la parcela de la que habla el agricultor confirmado y trae su contexto. Usar solo después de confirm_farmer.",
+  "description": "Sets the plot the confirmed farmer is talking about and fetches its context. Use only after confirm_farmer.",
   "response_timeout_secs": 10,
   "api_schema": {
-    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/get-plot-context",
+    "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/get-plot-context",
     "method": "POST",
     "request_headers": {
       "Authorization": {
-        "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET"
+        "secret_id": "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET"
       }
     },
     "request_body_schema": {
@@ -23,7 +23,7 @@
         },
         "plot_number": {
           "type": "integer",
-          "description": "Número de la parcela en la lista de confirm_farmer. Omitir si solo tiene una"
+          "description": "Number of the plot in confirm_farmer's list. Omit if they only have one"
         }
       }
     }

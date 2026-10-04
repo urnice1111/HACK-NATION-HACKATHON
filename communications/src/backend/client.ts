@@ -1,8 +1,8 @@
 /**
- * Cliente del backend /v1 para las server tools y los webhooks. No confía en
- * el backend ni en el modelo: valida cada respuesta contra el contrato, y un
- * timeout en una escritura se reporta como resultado ambiguo (`timeout`) para
- * reintentar con la MISMA Idempotency-Key, nunca con una nueva.
+ * Backend /v1 client for the server tools and webhooks. Trusts neither the
+ * backend nor the model: validates every response against the contract, and a
+ * timeout on a write is reported as an ambiguous result (`timeout`) so it is
+ * retried with the SAME Idempotency-Key, never a new one.
  */
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
@@ -30,19 +30,19 @@ import {
 
 export interface BackendClientOptions {
   baseUrl: string;
-  /** El asesor (Integrante 2) es otro servicio; por defecto, `baseUrl` (el mock sirve ambos). */
+  /** The advisor (Member 2) is a separate service; defaults to `baseUrl` (the mock serves both). */
   advisorBaseUrl?: string | null;
-  /** Sin token no se envía `Authorization` (el backend real aún no autentica servicios). */
+  /** Without a token no `Authorization` is sent (the real backend doesn't authenticate services yet). */
   serviceToken?: string | null;
   timeoutMs?: number;
   fetch?: typeof fetch;
 }
 
 export interface CallOptions {
-  /** `correlation_id` de la sesión; normalmente el session_id. */
+  /** The session's `correlation_id`; usually the session_id. */
   correlationId?: string;
   requestId?: string;
-  /** Solo para el mock: ver X-Mock-Scenario en src/mock-backend/server.ts. */
+  /** Mock only: see X-Mock-Scenario in src/mock-backend/server.ts. */
   mockScenario?: string;
 }
 
@@ -50,7 +50,7 @@ export type BackendResult<T> =
   | { ok: true; status: number; data: T; requestId: string; replayed: boolean }
   | {
       ok: false;
-      /** http: el backend respondió con error. timeout: no se sabe si la escritura ocurrió. */
+      /** http: the backend answered with an error. timeout: unknown whether the write happened. */
       kind: "http" | "timeout" | "network" | "invalid_response";
       status: number | null;
       code: string;
@@ -58,7 +58,7 @@ export type BackendResult<T> =
       requestId: string;
     };
 
-/** Clave estable por sesión y turno (CLAUDE.md): `report-<session_id>-turn-<nn>`. */
+/** Stable key per session and turn (CLAUDE.md): `report-<session_id>-turn-<nn>`. */
 export function reportIdempotencyKey(sessionId: string, turn: number): string {
   return `report-${sessionId}-turn-${String(turn).padStart(2, "0")}`;
 }
@@ -80,7 +80,7 @@ export class BackendClient {
     return this.call("POST", "/v1/contact-resolution", ContactResolutionResponse, { body, opts: withSession(opts, body.session_id) });
   }
 
-  /** Solo tras confirmar la parcela; la sesión viaja en X-Session-Id. */
+  /** Only after confirming the plot; the session travels in X-Session-Id. */
   getPlotContext(plotId: string, sessionId: string, opts: CallOptions = {}) {
     return this.call("GET", `/v1/plots/${encodeURIComponent(plotId)}/context`, PlotContext, {
       opts: withSession(opts, sessionId),
@@ -108,7 +108,7 @@ export class BackendClient {
     return this.call("GET", `/v1/reports/${encodeURIComponent(reportId)}`, ReportDetail, { opts });
   }
 
-  /** Una respuesta por seguimiento y sesión. */
+  /** One response per follow-up and session. */
   submitFollowupResponse(
     followupId: string,
     body: FollowupResponseRequest,
@@ -122,7 +122,7 @@ export class BackendClient {
     });
   }
 
-  /** Seguimientos con resumen del caso y contacto (solo token `comms`). */
+  /** Follow-ups with case summary and contact (`comms` token only). */
   listFollowups(status: FollowupStatus, filters: { dueBefore?: string } = {}, opts: CallOptions = {}) {
     const query = new URLSearchParams({ status });
     if (filters.dueBefore) query.set("due_before", filters.dueBefore);
@@ -130,8 +130,8 @@ export class BackendClient {
   }
 
   /**
-   * Registra un intento de contacto; `contacting` liga la sesión a la parcela del caso.
-   * Un intento por sesión y estado: repetir el callback del proveedor no cuenta otro intento.
+   * Records a contact attempt; `contacting` binds the session to the case's plot.
+   * One attempt per session and status: a repeated provider callback doesn't count as another attempt.
    */
   recordFollowupAttempt(
     followupId: string,
@@ -146,7 +146,7 @@ export class BackendClient {
     });
   }
 
-  /** Guarda los tres permisos de la sección 17; una escritura por sesión. */
+  /** Stores the three permissions of section 17; one write per session. */
   recordConsent(body: ConsentRequest, idempotencyKey = `consent-${body.session_id}`, opts: CallOptions = {}) {
     return this.call("POST", "/v1/consents", ConsentRecorded, {
       body,
@@ -155,7 +155,7 @@ export class BackendClient {
     });
   }
 
-  /** "BAJA" por SMS. */
+  /** "ALERTS OFF" by SMS. */
   revokeConsent(body: ConsentRevocationRequest, idempotencyKey: string, opts: CallOptions = {}) {
     return this.call("POST", "/v1/consents/revocations", ConsentRevoked, {
       body,
@@ -226,7 +226,7 @@ export class BackendClient {
           requestId: parsedError.data.error.request_id,
         };
       }
-      // Error JSON sin la forma uniforme (p. ej. `{"detail": …}` de FastAPI en el asesor): se respeta el código HTTP.
+      // JSON error without the uniform shape (e.g. FastAPI's `{"detail": …}` in the advisor): keep the HTTP status.
       return {
         ok: false,
         kind: "http",
@@ -249,7 +249,7 @@ export class BackendClient {
   }
 }
 
-/** Las rutas ya llevan `/v1`: "http://localhost:8000/v1/" → "http://localhost:8000". */
+/** Routes already include `/v1`: "http://localhost:8000/v1/" → "http://localhost:8000". */
 function origin(url: string): string {
   return url.replace(/\/+$/, "").replace(/\/v1$/, "");
 }
@@ -258,7 +258,7 @@ function withSession(opts: CallOptions, sessionId: string): CallOptions {
   return { ...opts, correlationId: opts.correlationId ?? sessionId };
 }
 
-/** `{"detail": {"code": "…"}}` → el código; cualquier otra forma → null. */
+/** `{"detail": {"code": "…"}}` → the code; any other shape → null. */
 function detailCode(payload: unknown): string | null {
   const detail = (payload as { detail?: unknown } | null)?.detail;
   const code = (detail as { code?: unknown } | null)?.code;

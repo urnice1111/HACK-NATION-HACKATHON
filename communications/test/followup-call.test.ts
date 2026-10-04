@@ -23,7 +23,7 @@ const TOOL_SECRET = "test-tool-secret-0123456789";
 const COMMS_TOKEN = "test-comms-token-0123456789";
 const MINUTE = 60 * 1000;
 
-let clock = Date.parse("2026-10-03T23:00:00Z"); // 17:00 en America/Mexico_City
+let clock = Date.parse("2026-10-03T23:00:00Z"); // 17:00 in America/Mexico_City
 let mockState: MockState;
 let client: BackendClient;
 let writer: BackendWriter;
@@ -70,8 +70,8 @@ before(async () => {
     placementBackoffMs: 2 * MINUTE,
     now,
   });
-  tools = new VoiceTools({ client, writer, isDemo: true, defaultLanguage: "es", now });
-  const conversation = new SmsConversation({ client, store, writer, followups: followupSms, isDemo: true, defaultLanguage: "es", idleMs: 30 * MINUTE, now });
+  tools = new VoiceTools({ client, writer, isDemo: true, defaultLanguage: "en", now });
+  const conversation = new SmsConversation({ client, store, writer, followups: followupSms, isDemo: true, defaultLanguage: "en", idleMs: 30 * MINUTE, now });
   commsUrl = await listen(
     createCommsServer({
       publicBaseUrl: "https://comms.example.test",
@@ -95,7 +95,7 @@ async function followup(predicate: (f: FollowupListItem) => boolean, status: "sc
   const list = await client.listFollowups(status);
   assert.ok(list.ok);
   const item = list.data.followups.find(predicate);
-  assert.ok(item, "seguimiento no encontrado");
+  assert.ok(item, "follow-up not found");
   return item;
 }
 
@@ -114,8 +114,8 @@ function stored(id: string) {
   return mockState.followups.find((f) => f.id === id)!;
 }
 
-describe("despacho de followup.due", () => {
-  it("fuera de horario espera; sin permiso o fuera de la lista blanca no llama", async () => {
+describe("followup.due dispatch", () => {
+  it("outside allowed hours it waits; without permission or outside the allowlist it doesn't call", async () => {
     const item = await followup(byId("followup_demo_05"));
     const contact = (c: Partial<FollowupListItem["contact"]>) => ({ ...item, contact: { ...item.contact, ...c } });
     assert.deepEqual(await dispatcher.dispatch(contact({ allowed_hours: { start: "06:00", end: "07:00" } })), { status: "deferred", reason: "outside_hours" });
@@ -124,7 +124,7 @@ describe("despacho de followup.due", () => {
     assert.equal(caller.calls.length, 0);
   });
 
-  it("llama con las variables dinámicas del caso y liga la sesión a la parcela", async () => {
+  it("calls with the case's dynamic variables and binds the session to the plot", async () => {
     const result = await dispatcher.dispatch(await followup(byId("followup_demo_05")));
     assert.equal(result.status, "call_placed");
     assert.ok(result.status === "call_placed");
@@ -133,12 +133,12 @@ describe("despacho de followup.due", () => {
     const call = caller.calls.at(-1)!;
     assert.equal(call.to, "+12025550105");
     assert.equal(call.dynamicVariables.farmer_name, "Marta");
-    assert.equal(call.dynamicVariables.threat_label, "roya del café");
-    assert.match(String(call.dynamicVariables.symptoms), /manchas amarillas/);
+    assert.equal(call.dynamicVariables.threat_label, "coffee leaf rust");
+    assert.match(String(call.dynamicVariables.symptoms), /yellow spots/);
     assert.equal(call.dynamicVariables.followup_id, "followup_demo_05");
     assert.equal(call.dynamicVariables.plot_id, "plot_demo_05");
     assert.equal(call.dynamicVariables.session_id, result.session_id);
-    assert.ok(!Object.values(call.dynamicVariables).includes("+12025550105"), "el teléfono no va al modelo");
+    assert.ok(!Object.values(call.dynamicVariables).includes("+12025550105"), "the phone never reaches the model");
 
     const f = stored("followup_demo_05");
     assert.equal(f.status, "contacting");
@@ -148,20 +148,20 @@ describe("despacho de followup.due", () => {
     assert.deepEqual(await dispatcher.dispatchById("followup_demo_05"), { status: "skipped", reason: "in_progress" });
   });
 
-  it("submit_followup: exige el secreto; con todas las respuestas registra y crea la resolución", async () => {
+  it("submit_followup: requires the secret; with all the answers it records and creates the resolution", async () => {
     const sessionId = String(caller.calls.at(-1)!.dynamicVariables.session_id);
     const body = {
       session_id: sessionId,
       followup_id: "followup_demo_05",
       conversation_id: caller.calls.at(-1)!.conversation_id,
       status_reported: "resolved",
-      user_statement: "Ya no salen manchas desde que quité las hojas",
-      actions_taken: "Quitó las hojas con manchas y las enterró",
+      user_statement: "No more spots since I removed the leaves",
+      actions_taken: "Removed the spotted leaves and buried them",
       action_worked: "yes",
       change_noticed_days_ago: 3,
     };
     assert.equal((await postJson("/v1/tools/submit-followup", body, null)).status, 401);
-    assert.equal((await postJson("/v1/tools/submit-followup", body, "otro-secreto-cualquiera")).status, 401);
+    assert.equal((await postJson("/v1/tools/submit-followup", body, "some-other-secret")).status, 401);
 
     const res = await postJson("/v1/tools/submit-followup", body, TOOL_SECRET);
     assert.equal(res.status, 200);
@@ -169,33 +169,33 @@ describe("despacho de followup.due", () => {
     assert.equal(res.json.resolved, true);
 
     const resolution = mockState.resolutions.find((r) => r.followup_id === "followup_demo_05")!;
-    assert.equal(resolution.solution_statement, "Quitó las hojas con manchas y las enterró");
+    assert.equal(resolution.solution_statement, "Removed the spotted leaves and buried them");
     assert.equal(resolution.resolved_at, "2026-09-30T00:00:00.000Z");
     assert.equal(stored("followup_demo_05").status, "responded");
 
     const replay = await postJson("/v1/tools/submit-followup", body, TOOL_SECRET);
-    assert.equal(replay.json.registered, true, "repetir la herramienta devuelve el original");
+    assert.equal(replay.json.registered, true, "repeating the tool call returns the original");
     assert.equal(mockState.resolutions.filter((r) => r.followup_id === "followup_demo_05").length, 1);
 
-    // Respondió: vencido el plazo, el barrido no registra no_response.
+    // They answered: after the deadline the sweep doesn't record no_response.
     clock += 11 * MINUTE;
     await dispatcher.sweep();
     await writer.drain();
     assert.equal(stored("followup_demo_05").status, "responded");
   });
 
-  it("parámetros inválidos → 422 con el error uniforme", async () => {
+  it("invalid parameters → 422 with the uniform error", async () => {
     const res = await postJson("/v1/tools/submit-followup", { session_id: "s", followup_id: "f", status_reported: "fatal" }, TOOL_SECRET);
     assert.equal(res.status, 422);
     assert.equal(res.json.error.code, "VALIDATION_ERROR");
   });
 });
 
-describe("si empeoró: assess_observation y submit_report", () => {
+describe("if it got worse: assess_observation and submit_report", () => {
   let sessionId: string;
   let conversationId: string;
 
-  it("submit_followup con worse programa otro seguimiento y pide evaluar", async () => {
+  it("submit_followup with worse schedules another follow-up and asks for an assessment", async () => {
     const created = mockState.scheduleFollowup("case_demo_06");
     const result = await dispatcher.dispatch(await followup(byId(created.id)));
     assert.ok(result.status === "call_placed");
@@ -207,7 +207,7 @@ describe("si empeoró: assess_observation y submit_report", () => {
       followup_id: created.id,
       conversation_id: conversationId,
       status_reported: "worse",
-      user_statement: "Está peor, hay más manchas",
+      user_statement: "It's worse, there are more spots",
       actions_taken: null,
       action_worked: "no",
     });
@@ -217,18 +217,18 @@ describe("si empeoró: assess_observation y submit_report", () => {
     assert.match(String(body.instruction), /assess_observation/);
   });
 
-  it("evalúa con necesidades, \"no sé\" sin value, orientación y reporte guardado", async () => {
-    const first = (await tools.assessObservation({ session_id: sessionId, plot_id: "plot_demo_06", user_statement: "Ahora hay más manchas y se caen las hojas" })).body as any;
+  it("assesses with needs, \"I don't know\" without value, guidance and a saved report", async () => {
+    const first = (await tools.assessObservation({ session_id: sessionId, plot_id: "plot_demo_06", user_statement: "Now there are more spots and the leaves are falling" })).body as any;
     assert.equal(first.disposition, "ask_more");
     assert.equal(first.information_needs[0].need_code, "local_weather_perception");
-    assert.ok(!("reason" in first.information_needs[0]), "no se pasa el razonamiento interno al agente");
+    assert.ok(!("reason" in first.information_needs[0]), "the internal reasoning is never passed to the agent");
 
-    // El modelo omite value cuando el agricultor no sabe: se normaliza a null/unknown.
-    const weather = { need_code: "local_weather_perception", raw_text: "no sé", unknown: true };
+    // The model omits value when the farmer doesn't know: normalized to null/unknown.
+    const weather = { need_code: "local_weather_perception", raw_text: "I don't know", unknown: true };
     const second = (await tools.assessObservation({
       session_id: sessionId,
       plot_id: "plot_demo_06",
-      user_statement: "Ahora hay más manchas y se caen las hojas",
+      user_statement: "Now there are more spots and the leaves are falling",
       answers: [weather],
       asked_need_codes: ["local_weather_perception"],
     })).body as any;
@@ -238,8 +238,8 @@ describe("si empeoró: assess_observation y submit_report", () => {
     const third = (await tools.assessObservation({
       session_id: sessionId,
       plot_id: "plot_demo_06",
-      user_statement: "Ahora hay más manchas y se caen las hojas",
-      answers: [weather, { need_code: "leaf_underside", value: "polvo naranja o amarillo", raw_text: "como polvito naranja", unknown: false }],
+      user_statement: "Now there are more spots and the leaves are falling",
+      answers: [weather, { need_code: "leaf_underside", value: "orange or yellow powder", raw_text: "like an orange dust", unknown: false }],
       asked_need_codes: ["local_weather_perception", "leaf_underside"],
     })).body as any;
     assert.equal(third.disposition, "advise");
@@ -250,29 +250,29 @@ describe("si empeoró: assess_observation y submit_report", () => {
       session_id: sessionId,
       plot_id: "plot_demo_06",
       conversation_id: conversationId,
-      user_statement: "Más manchas, se caen las hojas, polvito naranja abajo",
+      user_statement: "More spots, the leaves are falling, orange dust underneath",
       completeness: "sufficient",
     })).body as any;
     assert.equal(saved.registered, true);
     const report = [...mockState.reports.values()].find((r) => r.session_id === sessionId && r.assessment_id !== null);
-    assert.equal(report?.assessment_id, third.assessment_id, "toma la última evaluación si el modelo no la manda");
+    assert.equal(report?.assessment_id, third.assessment_id, "uses the last assessment if the model doesn't send it");
     assert.equal(report?.channel, "voice");
     assert.equal(report?.provider_reference, conversationId);
   });
 
-  it("límite de 5 preguntas: no vuelve a llamar al asesor", async () => {
+  it("5-question limit: doesn't call the advisor again", async () => {
     const res = (await tools.assessObservation({
-      session_id: "voice_fu_limite",
+      session_id: "voice_fu_limit",
       plot_id: "plot_demo_06",
-      user_statement: "manchas",
+      user_statement: "spots",
       asked_need_codes: ["a", "b", "c", "d", "e"],
     })).body as any;
     assert.equal(res.disposition, "limit_reached");
   });
 });
 
-describe("reintentos y respaldo por SMS", () => {
-  it("tras 3 llamadas sin respuesta, envía el SMS de respaldo", async () => {
+describe("retries and SMS fallback", () => {
+  it("after 3 unanswered calls, sends the fallback SMS", async () => {
     const result = await dispatcher.dispatch(await followup(byId("followup_demo_06"), "no_response"));
     assert.equal(result.status, "sms");
     assert.ok(result.status === "sms" && result.result.status === "sent");
@@ -280,7 +280,7 @@ describe("reintentos y respaldo por SMS", () => {
     assert.equal(stored("followup_demo_06").channel, "sms");
   });
 
-  it("llamada sin resultado: no_response tras el plazo, reintento a los 2 min por sondeo", async () => {
+  it("call with no result: no_response after the deadline, retry at 2 min via polling", async () => {
     const next = await followup((f) => f.case_id === "case_demo_06" && f.attempt_count === 0);
     const first = await dispatcher.dispatch(next);
     assert.equal(first.status, "call_placed");
@@ -290,10 +290,10 @@ describe("reintentos y respaldo por SMS", () => {
     await writer.drain();
     assert.equal(stored(next.followup_id).status, "no_response");
     assert.equal(stored(next.followup_id).attempt_count, 1);
-    assert.equal(mockState.cases.find((c) => c.id === "case_demo_06")?.status, "monitoring", "el silencio no cambia el caso");
+    assert.equal(mockState.cases.find((c) => c.id === "case_demo_06")?.status, "monitoring", "silence doesn't change the case");
 
     const callsBefore = caller.calls.length;
-    await dispatcher.poll(); // aún no vence el reintento
+    await dispatcher.poll(); // the retry isn't due yet
     assert.equal(caller.calls.length, callsBefore);
 
     clock += 3 * MINUTE;
@@ -302,13 +302,13 @@ describe("reintentos y respaldo por SMS", () => {
     assert.equal(stored(next.followup_id).attempt_count, 2);
   });
 
-  it("sin sondeo: una llamada sin resultado vence con el siguiente evento y no bloquea tras resetear el backend", async () => {
+  it("without polling: a call with no result expires on the next event and doesn't block after a backend reset", async () => {
     const fresh = mockState.scheduleFollowup("case_demo_05");
     assert.equal((await dispatcher.dispatchById(fresh.id)).status, "call_placed");
     assert.deepEqual(await dispatcher.dispatchById(fresh.id), { status: "skipped", reason: "in_progress" });
     await writer.drain();
 
-    // El Integrante 3 resetea el seguimiento a mano (scheduled, 0 intentos).
+    // Member 3 resets the follow-up by hand (scheduled, 0 attempts).
     Object.assign(mockState.followups.find((f) => f.id === fresh.id)!, { status: "scheduled", attempt_count: 0, call_reference: null });
     clock += 11 * MINUTE;
     const again = await dispatcher.dispatchById(fresh.id);
@@ -316,7 +316,7 @@ describe("reintentos y respaldo por SMS", () => {
     await writer.drain();
   });
 
-  it("fallo transitorio de ElevenLabs: espera sin registrar intento; ambiguo: registra y no repite", async () => {
+  it("transient ElevenLabs failure: waits without recording an attempt; ambiguous: records and doesn't repeat", async () => {
     const created = mockState.scheduleFollowup("case_demo_06");
     const item = await followup(byId(created.id));
 
@@ -334,7 +334,7 @@ describe("reintentos y respaldo por SMS", () => {
   });
 });
 
-describe("evento followup.due por HTTP (PROPUESTO)", () => {
+describe("followup.due event over HTTP (PROPOSED)", () => {
   function event(followupId: string, eventId: string) {
     return {
       event_id: eventId,
@@ -349,12 +349,12 @@ describe("evento followup.due por HTTP (PROPUESTO)", () => {
     };
   }
 
-  it("token, validación y deduplicación por event_id", async () => {
+  it("token, validation and deduplication by event_id", async () => {
     const created = mockState.scheduleFollowup("case_demo_06");
     const path = `/v1/followups/${created.id}/dispatch`;
 
     assert.equal((await postJson(path, event(created.id, "evt_1"), null)).status, 401);
-    assert.equal((await postJson(path, event("otro_seguimiento", "evt_1"), COMMS_TOKEN)).status, 422);
+    assert.equal((await postJson(path, event("another_followup", "evt_1"), COMMS_TOKEN)).status, 422);
 
     const first = await postJson(path, event(created.id, "evt_1"), COMMS_TOKEN);
     assert.equal(first.status, 202);
@@ -364,15 +364,15 @@ describe("evento followup.due por HTTP (PROPUESTO)", () => {
     const replay = await postJson(path, event(created.id, "evt_1"), COMMS_TOKEN);
     assert.equal(replay.status, 200);
     assert.equal(replay.json.replayed, true);
-    assert.equal(caller.calls.length, calls, "un evento repetido no vuelve a llamar");
+    assert.equal(caller.calls.length, calls, "a repeated event doesn't call again");
   });
 });
 
-describe("DEMO_IGNORE_ALLOWED_HOURS en el despachador", () => {
-  it("fuera de horario: sin la opción espera; con la opción (demo) llama", async () => {
+describe("DEMO_IGNORE_ALLOWED_HOURS in the dispatcher", () => {
+  it("outside allowed hours: without the option it waits; with the option (demo) it calls", async () => {
     const created = mockState.scheduleFollowup("case_demo_06");
     const listed = await followup(byId(created.id));
-    // Horario del contacto que ya pasó a esta hora (17:xx en México).
+    // Contact hours already over at this time (17:xx in Mexico).
     const item = { ...listed, contact: { ...listed.contact, allowed_hours: { start: "06:00", end: "07:00" } } };
     assert.deepEqual(await dispatcher.dispatch(item), { status: "deferred", reason: "outside_hours" });
 

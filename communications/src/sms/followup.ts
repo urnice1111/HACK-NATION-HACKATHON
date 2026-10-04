@@ -1,16 +1,16 @@
 /**
- * Seguimiento por SMS: respaldo cuando se agotan las 3 llamadas (secciones 2.2
- * y 17). Envía una pregunta breve y convierte las respuestas en
- * `submit_followup` (10.4): cómo sigue la parcela, qué hizo y si funcionó.
+ * SMS follow-up: fallback once the 3 calls are used up (sections 2.2 and 17).
+ * Sends a short question and turns the replies into `submit_followup` (10.4):
+ * how the plot is doing, what they did and whether it worked.
  *
- * Reglas:
- *  - Solo con consentimiento de seguimiento, en horario permitido y, en demo,
- *    a números de la lista blanca.
- *  - El intento `contacting` se registra ANTES de enviar: liga la sesión a la
- *    parcela del caso para poder guardar la respuesta.
- *  - Envío ambiguo (timeout): no se reenvía; la sesión queda abierta por si responde.
- *  - Sin respuesta en la ventana: se registra `no_response`. Nunca se declara resolución.
- *  - Solo se dice "quedó registrado" tras un 201.
+ * Rules:
+ *  - Only with follow-up consent, within allowed hours and, in demo, to
+ *    allowlisted numbers.
+ *  - The `contacting` attempt is recorded BEFORE sending: it binds the session
+ *    to the case's plot so the reply can be saved.
+ *  - Ambiguous send (timeout): never resent; the session stays open in case they reply.
+ *  - No reply within the window: `no_response` is recorded. Never declares a resolution.
+ *  - "It's been recorded" is only said after a 201.
  */
 import { randomUUID } from "node:crypto";
 import type { BackendClient } from "../backend/client.ts";
@@ -32,9 +32,9 @@ export interface FollowupFlowDeps {
   sender: SmsSender;
   isDemo: boolean;
   demoAllowlist: ReadonlySet<string>;
-  /** DEMO_IGNORE_ALLOWED_HOURS (solo demo). */
+  /** DEMO_IGNORE_ALLOWED_HOURS (demo only). */
   ignoreAllowedHours?: boolean;
-  /** Cuánto esperamos la respuesta antes de registrar `no_response`. */
+  /** How long we wait for a reply before recording `no_response`. */
   replyWindowMs: number;
   now?: () => Date;
 }
@@ -51,7 +51,7 @@ export class FollowupSmsFlow {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** Envía el SMS de seguimiento. Quien llama (el despachador de `followup.due`) decide cuándo. */
+  /** Sends the follow-up SMS. The caller (the `followup.due` dispatcher) decides when. */
   async start(item: FollowupListItem): Promise<FollowupStartResult> {
     const phone = item.contact.phone_e164;
     const correlation = { followup_id: item.followup_id, phone: maskPhone(phone) };
@@ -68,7 +68,7 @@ export class FollowupSmsFlow {
       ignoreAllowedHours: this.deps.ignoreAllowedHours,
     });
     if (!decision.ok) return this.skip(decision.reason, correlation);
-    // No se pisa una conversación en curso; el despachador lo reintentará.
+    // Never step on an ongoing conversation; the dispatcher will retry.
     if (isOpen(this.deps.store.get(phone))) return this.skip("busy", correlation);
 
     const sessionId = `sms_fu_${randomUUID()}`;
@@ -101,7 +101,7 @@ export class FollowupSmsFlow {
       statements: [],
       submitted: false,
     };
-    // También tras un envío ambiguo: si el SMS sí salió, la respuesta debe encontrar su sesión.
+    // Also after an ambiguous send: if the SMS did go out, the reply must find its session.
     this.deps.store.set(phone, session);
 
     if (!sent.ok) {
@@ -146,9 +146,9 @@ export class FollowupSmsFlow {
   }
 
   /**
-   * Cierra la sesión. Con respuestas, guarda lo que hay (desconocido donde
-   * falte). Sin ninguna respuesta: `no_response` si venció la ventana; nada si
-   * pidió la baja (la baja ya impide más contactos).
+   * Closes the session. With replies, saves what there is (unknown where
+   * missing). With no reply at all: `no_response` if the window expired; nothing
+   * if they opted out (the opt-out already prevents further contact).
    */
   async close(session: FollowupSmsSession, reason: "idle" | "opt_out"): Promise<void> {
     this.deps.store.delete(session.phone_e164);
@@ -190,11 +190,11 @@ export class FollowupSmsFlow {
   private async reAsk(session: FollowupSmsSession, retry: string): Promise<string> {
     session.invalid_replies += 1;
     if (session.invalid_replies < MAX_INVALID_REPLIES) return `${sms.notUnderstood} ${retry}`;
-    // Respondió, pero no entendimos: se guarda como desconocido con su texto, nunca como resolución.
+    // They replied but we couldn't parse it: saved as unknown with their text, never as a resolution.
     return replyFor(session, await this.finish(session));
   }
 
-  /** En segundo plano: no bloquea la respuesta y se reintenta con la misma clave. */
+  /** In the background: doesn't block the reply and retries with the same key. */
   private recordAttempt(followupId: string, sessionId: string, status: "no_response" | "failed"): void {
     this.deps.writer.track(this.deps.writer.recordFollowupAttempt(followupId, this.attemptBody(sessionId, status)));
   }

@@ -1,12 +1,11 @@
 /**
- * Estado de conversaciones SMS, por teléfono. Hay dos tipos: la de ayuda
- * (reporte iniciado por el agricultor) y la de seguimiento (iniciada por
- * nosotros cuando la llamada no tuvo respuesta).
+ * SMS conversation state, per phone. Two kinds: help (a report started by
+ * the farmer) and follow-up (started by us when the call went unanswered).
  *
- * En memoria: si el proceso se reinicia, la conversación vuelve a empezar.
- * Lo que no se puede perder (el reporte y su deduplicación) vive en el
- * backend, con una Idempotency-Key derivada del MessageSid. Persistir las
- * sesiones requiere una tabla del Integrante 3.
+ * In memory: if the process restarts, the conversation starts over. What
+ * can't be lost (the report and its deduplication) lives in the backend, with
+ * an Idempotency-Key derived from the MessageSid. Persisting sessions needs a
+ * table from Member 3.
  */
 import type {
   ActionWorked,
@@ -31,21 +30,21 @@ export interface SmsSession {
   kind: "help";
   session_id: string;
   phone_e164: string;
-  /** MessageSid del primer SMS: `provider_reference` y base de la Idempotency-Key del reporte. */
+  /** MessageSid of the first SMS: `provider_reference` and base of the report's Idempotency-Key. */
   first_message_sid: string;
   last_activity_at: number;
   stage: Stage;
   invalid_replies: number;
   farmer: { farmer_id: string; language: string } | null;
   plot: { plot_id: string; crop: string | null; variety: string | null } | null;
-  /** Permisos guardados en el backend al confirmar identidad; null si no hay agricultor confirmado. */
+  /** Permissions stored in the backend when identity was confirmed; null without a confirmed farmer. */
   stored_consent: ContactConsent | null;
-  /** Respuestas de esta conversación; null = no se preguntó. */
+  /** Answers in this conversation; null = not asked. */
   consent: Record<ConsentScope, boolean | null>;
-  /** Palabras del agricultor (descripción y respuestas), sin interpretar. */
+  /** The farmer's own words (description and answers), uninterpreted. */
   statements: string[];
   answers: ObservationAnswer[];
-  /** Necesidades ya preguntadas; se envían en cada evaluación para que el asesor no las repita. */
+  /** Needs already asked; sent with every assessment so the advisor doesn't repeat them. */
   asked_need_codes: string[];
   assessment_rounds: number;
   last_assessment_id: string | null;
@@ -54,16 +53,16 @@ export interface SmsSession {
 
 export type FollowupStage = "status" | "actions" | "worked" | "closed";
 
-/** Seguimiento por SMS tras agotar las llamadas (sección 17). */
+/** SMS follow-up after the calls are used up (section 17). */
 export interface FollowupSmsSession {
   kind: "followup";
-  /** Ligado a la parcela del caso con el intento `contacting`. */
+  /** Bound to the case's plot by the `contacting` attempt. */
   session_id: string;
   phone_e164: string;
   followup_id: string;
-  /** sid del SMS saliente. */
+  /** sid of the outbound SMS. */
   outbound_reference: string | null;
-  /** MessageSid de la primera respuesta: `provider_reference` y base de la Idempotency-Key. */
+  /** MessageSid of the first reply: `provider_reference` and base of the Idempotency-Key. */
   first_reply_sid: string | null;
   last_activity_at: number;
   stage: FollowupStage;
@@ -77,7 +76,7 @@ export interface FollowupSmsSession {
 
 export type AnySession = SmsSession | FollowupSmsSession;
 
-/** Sesiones por teléfono E.164. */
+/** Sessions by E.164 phone. */
 export type SessionStore = Map<string, AnySession>;
 
 export function isOpen(session: AnySession | undefined): session is AnySession {

@@ -1,9 +1,8 @@
 /**
- * Reglas para contactar de forma proactiva (seguimientos y avisos), sección 17:
- * consentimiento explícito, horario permitido en la hora local del agricultor
- * (08:00–19:00 por defecto) y, en demo, solo números de la lista blanca.
- * Fuera de horario el trabajo espera. La única excepción es
- * `ignoreAllowedHours`, que solo tiene efecto en demo.
+ * Rules for proactive contact (follow-ups and alerts), section 17: explicit
+ * consent, allowed hours in the farmer's local time (08:00–19:00 by default)
+ * and, in demo, only allowlisted numbers. Outside allowed hours the work
+ * waits. The only exception is `ignoreAllowedHours`, which only applies in demo.
  */
 const DEFAULT_ALLOWED_HOURS = { start: "08:00", end: "19:00" } as const;
 
@@ -18,9 +17,9 @@ export interface OutreachInput {
   consent: boolean;
   now: Date;
   isDemo: boolean;
-  /** Lista blanca de demo; vacía = no se contacta a nadie. */
+  /** Demo allowlist; empty = nobody is contacted. */
   demoAllowlist: ReadonlySet<string>;
-  /** DEMO_IGNORE_ALLOWED_HOURS: se ignora fuera de demo aunque llegue en true. */
+  /** DEMO_IGNORE_ALLOWED_HOURS: ignored outside demo even if true. */
   ignoreAllowedHours?: boolean;
 }
 
@@ -30,7 +29,7 @@ function minutes(hhmm: string): number | null {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
-/** Minutos desde medianoche en la zona del agricultor. */
+/** Minutes since midnight in the farmer's time zone. */
 function localMinutes(now: Date, timezone: string): number {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const hour = Number(parts.find((p) => p.type === "hour")?.value);

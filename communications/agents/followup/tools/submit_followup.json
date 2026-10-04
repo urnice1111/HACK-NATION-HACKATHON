@@ -1,14 +1,14 @@
 {
   "type": "webhook",
   "name": "submit_followup",
-  "description": "Registra en una sola petición cómo sigue la parcela, qué hizo el agricultor, si funcionó y desde cuándo notó el cambio. Llamar una sola vez, al tener las cuatro respuestas.",
+  "description": "Records in a single request how the plot is doing, what the farmer did, whether it worked and when they noticed the change. Call it only once, when you have the four answers.",
   "response_timeout_secs": 10,
   "api_schema": {
-    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/submit-followup",
+    "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/submit-followup",
     "method": "POST",
     "request_headers": {
       "Authorization": {
-        "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET"
+        "secret_id": "ID_OF_SECRET_WITH_Bearer_ELEVENLABS_TOOL_SECRET"
       }
     },
     "request_body_schema": {
@@ -35,7 +35,7 @@
         },
         "status_reported": {
           "type": "string",
-          "description": "Cómo sigue la parcela: worse (peor), same (igual), improved (mejor), resolved (ya se resolvió), unknown (no sabe)",
+          "description": "How the plot is doing: worse, same, improved, resolved (the problem is gone), unknown (they don't know)",
           "enum": [
             "worse",
             "same",
@@ -46,15 +46,15 @@
         },
         "user_statement": {
           "type": "string",
-          "description": "Resumen breve, con las palabras del agricultor, de lo que contó"
+          "description": "Short summary, in the farmer's words, of what they said"
         },
         "actions_taken": {
           "type": "string",
-          "description": "Qué hizo el agricultor en la parcela. Vacío si no hizo nada o no sabe"
+          "description": "What the farmer did on the plot. Empty if they did nothing or don't know"
         },
         "action_worked": {
           "type": "string",
-          "description": "Si le funcionó lo que hizo: yes, no, partial (en parte) o unknown (no sabe)",
+          "description": "Whether what they did worked: yes, no, partial (partly) or unknown (they don't know)",
           "enum": [
             "yes",
             "no",
@@ -64,7 +64,7 @@
         },
         "change_noticed_days_ago": {
           "type": "integer",
-          "description": "Hace cuántos días notó el cambio. Omitir si no sabe o no hubo cambio. Nunca usar 0 para decir 'no sé'"
+          "description": "How many days ago they noticed the change. Omit if they don't know or there was no change. Never use 0 to mean 'I don't know'"
         }
       }
     }

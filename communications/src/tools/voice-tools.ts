@@ -1,27 +1,27 @@
 /**
- * Server tools de los agentes de ElevenLabs (CLAUDE.md, sección 4). El agente
- * llama a comunicaciones, no al backend: así no recibe credenciales de
- * servicio y las reglas se cumplen en código, no en el prompt.
+ * Server tools for the ElevenLabs agents (CLAUDE.md, section 4). The agent
+ * calls communications, not the backend: that way it never gets service
+ * credentials and the rules are enforced in code, not in the prompt.
  *
- * Dos agentes comparten estas herramientas:
- *  - Ayuda (llamada entrante, sección 2.1): `resolve_farmer` → `confirm_farmer` →
+ * Two agents share these tools:
+ *  - Help (inbound call, section 2.1): `resolve_farmer` → `confirm_farmer` →
  *    `get_plot_context` → `record_consent` → `assess_observation` → `submit_report`.
- *    La sesión es el `conversation_id` de ElevenLabs y el teléfono, el caller ID
- *    (variables de sistema). Identidad, parcela y permisos viven aquí: el modelo
- *    solo ve nombres numerados, nunca tokens ni IDs, y no puede elegir otra parcela
- *    ni guardar sin permiso.
- *  - Seguimiento (llamada saliente, sección 2.2): `submit_followup` y, si empeoró,
- *    `assess_observation` y `submit_report` con la sesión y la parcela que fijó el despachador.
+ *    The session is the ElevenLabs `conversation_id` and the phone is the caller ID
+ *    (system variables). Identity, plot and permissions live here: the model only
+ *    sees numbered names, never tokens or IDs, and can't pick another plot or
+ *    save without permission.
+ *  - Follow-up (outbound call, section 2.2): `submit_followup` and, if it got worse,
+ *    `assess_observation` and `submit_report` with the session and plot the dispatcher set.
  *
- * Reglas comunes:
- *  - Los IDs llegan de variables dinámicas, no los escribe el modelo.
- *  - Solo `registered: true` autoriza a decir "quedó registrado"; cualquier otro
- *    resultado trae una instrucción explícita de que NO se registró.
- *  - "No sé" se valida como `value: null, unknown: true`, nunca cero.
- *  - Máximo 3 rondas y 5 preguntas por llamada (sección 17), aunque el modelo insista.
+ * Shared rules:
+ *  - IDs come from dynamic variables; the model never writes them.
+ *  - Only `registered: true` allows saying "it's been recorded"; any other result
+ *    carries an explicit instruction that it was NOT recorded.
+ *  - "I don't know" is validated as `value: null, unknown: true`, never zero.
+ *  - At most 3 rounds and 5 questions per call (section 17), however much the model insists.
  *
- * Las respuestas son 200 con un resultado estructurado para que el modelo lo
- * lea; solo autenticación y validación devuelven 4xx con el error uniforme.
+ * Replies are 200 with a structured result for the model to read; only
+ * authentication and validation return 4xx with the uniform error.
  */
 import { z } from "zod";
 import { reportIdempotencyKey, type BackendClient } from "../backend/client.ts";
@@ -47,15 +47,15 @@ import type { ConsentScope } from "../sms/session.ts";
 import { BoundedMap } from "../util.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Sin actividad en este plazo, una llamada de ayuda se da por cortada. */
+/** With no activity for this long, a help call is considered dropped. */
 const DEFAULT_IDLE_MS = 15 * 60 * 1000;
 
 const ConversationId = z.string().min(1).max(200).nullish().transform((v) => v ?? null);
 const OptionalBoolean = z.boolean().nullish().transform((v) => v ?? null);
 
 /**
- * Respuesta tal como la manda el modelo (puede omitir `value` o `unit`). Se
- * normaliza al contrato: "no sé" → `value: null, unknown: true`; jamás un cero.
+ * Answer as the model sends it (it may omit `value` or `unit`). Normalized to
+ * the contract: "I don't know" → `value: null, unknown: true`; never a zero.
  */
 const ToolAnswer = z
   .object({
@@ -78,31 +78,31 @@ export const SubmitFollowupInput = z.object({
   user_statement: z.string().max(4000).default(""),
   actions_taken: z.string().max(2000).nullish().transform((v) => (v?.trim() ? v.trim() : null)),
   action_worked: ActionWorked.default("unknown"),
-  /** Días desde que notó el cambio; null si no sabe o no hubo cambio. El agente no dicta fechas ISO. */
+  /** Days since they noticed the change; null if unknown or no change. The agent never dictates ISO dates. */
   change_noticed_days_ago: z.number().int().min(0).max(365).nullish().transform((v) => v ?? null),
 });
 
 export const ResolveFarmerInput = z.object({
   session_id: OpaqueId,
-  /** `system__caller_id`. Oculto o inválido → número no identificado (nunca se adivina). */
+  /** `system__caller_id`. Hidden or invalid → unidentified number (never guessed). */
   caller_phone: z.string().max(64).nullish().transform((v) => normalizeE164(v)),
 });
 
 export const ConfirmFarmerInput = z.object({
   session_id: OpaqueId,
-  /** Número de la lista que devolvió `resolve_farmer` (1 = el primero). */
+  /** Number from the list `resolve_farmer` returned (1 = the first). */
   candidate_number: z.coerce.number().int().min(1).max(20),
 });
 
 export const GetPlotContextInput = z.object({
   session_id: OpaqueId,
-  /** Número de la lista de parcelas de `confirm_farmer`; puede omitirse si solo hay una. */
+  /** Number from `confirm_farmer`'s plot list; may be omitted when there is only one. */
   plot_number: z.coerce.number().int().min(1).max(50).nullish().transform((v) => v ?? null),
 });
 
 export const RecordConsentInput = z.object({
   session_id: OpaqueId,
-  /** null u omitido = no se preguntó en esta llamada. */
+  /** null or omitted = not asked in this call. */
   reports: OptionalBoolean,
   notifications: OptionalBoolean,
   followup_calls: OptionalBoolean,
@@ -110,7 +110,7 @@ export const RecordConsentInput = z.object({
 
 export const AssessObservationInput = z.object({
   session_id: OpaqueId,
-  /** Solo el agente de seguimiento lo manda (variable dinámica); en ayuda se usa la parcela confirmada. */
+  /** Only the follow-up agent sends it (dynamic variable); help calls use the confirmed plot. */
   plot_id: OpaqueId.nullish().transform((v) => v ?? null),
   user_statement: z.string().max(4000),
   symptoms: z.array(z.string().min(1).max(200)).max(20).default([]),
@@ -138,12 +138,12 @@ export interface VoiceToolsDeps {
   writer: BackendWriter;
   isDemo: boolean;
   defaultLanguage: string;
-  /** Inactividad tras la que una llamada de ayuda se da por cortada (y se guarda lo descrito como parcial). */
+  /** Inactivity after which a help call is considered dropped (and what was described is saved as partial). */
   idleMs?: number;
   now?: () => Date;
 }
 
-/** Estado de una llamada de ayuda: lo que el modelo no debe poder inventar. */
+/** State of a help call: what the model must not be able to make up. */
 interface HelpState {
   phone_e164: string | null;
   candidates: ContactCandidate[];
@@ -154,10 +154,10 @@ interface HelpState {
     plots: { plot_id: string; label: string }[];
     stored_consent: ContactConsent;
   } | null;
-  /** Respuestas de esta llamada; null = no se preguntó. */
+  /** Answers in this call; null = not asked. */
   consent: Record<ConsentScope, boolean | null>;
   consent_writes: number;
-  /** Última descripción evaluada: si la llamada se corta sin `submit_report`, se guarda como parcial. */
+  /** Last assessed description: if the call drops without `submit_report`, it is saved as partial. */
   statement: string;
   symptoms: string[];
 }
@@ -167,29 +167,29 @@ interface ToolSession {
   last_assessment_id: string | null;
   plot: { plot_id: string; crop: string | null; variety: string | null } | null;
   reports: number;
-  /** Solo en llamadas de ayuda (las inicia `resolve_farmer`). */
+  /** Only in help calls (started by `resolve_farmer`). */
   help: HelpState | null;
   last_activity_at: number;
 }
 
 function parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
-  return parseBody(schema, raw, "Parámetros de la herramienta inválidos");
+  return parseBody(schema, raw, "Invalid tool parameters");
 }
 
 const NOT_REGISTERED_PENDING =
-  "NO digas que quedó registrado. Di que no pudiste confirmar el registro, que el sistema lo va a reintentar y que no necesita volver a llamar.";
-const NOT_REGISTERED_FAILED = "NO digas que quedó registrado. Di que no se pudo registrar y que un técnico revisará su caso.";
+  "Do NOT say it was recorded. Say you couldn't confirm the record, that the system will retry and that they don't need to call again.";
+const NOT_REGISTERED_FAILED = "Do NOT say it was recorded. Say it couldn't be recorded and that a technician will review their case.";
 const UNKNOWN_CALLER =
-  "No hay un registro para este número. No busques ni elijas una parcela y no menciones nombres. Pide permiso para guardar su reporte y llama a record_consent con reports. Si acepta, pídele que describa el problema y llama a submit_report con completeness \"partial\": un técnico lo revisará. Sin parcela registrada no hay evaluación.";
+  "There is no record for this number. Don't look up or pick a plot and don't mention any names. Ask for permission to save their report and call record_consent with reports. If they agree, ask them to describe the problem and call submit_report with completeness \"partial\": a technician will review it. Without a registered plot there is no assessment.";
 const REPORTS_DECLINED =
-  "No aceptó que guardemos su reporte: NO llames a submit_report ni a assess_observation. Dile que está bien, que puede llamar cuando quiera, y despídete.";
+  "They did not agree to us saving their report: do NOT call submit_report or assess_observation. Tell them that's fine, that they can call anytime, and say goodbye.";
 const NO_REPORT_CONSENT =
-  "NO digas que quedó registrado. Antes de guardar, pregúntale si nos da permiso de guardar su reporte para que un técnico lo revise y llama a record_consent con reports. Si dice que no, no guardes nada.";
+  "Do NOT say it was recorded. Before saving, ask whether they give us permission to save their report so a technician can review it, and call record_consent with reports. If they say no, don't save anything.";
 
 export class VoiceTools {
   private readonly now: () => Date;
   private readonly idleMs: number;
-  /** Estado por sesión de voz; vive lo que dura una llamada. */
+  /** State per voice session; lives as long as a call. */
   private readonly sessions = new BoundedMap<string, ToolSession>();
 
   constructor(private readonly deps: VoiceToolsDeps) {
@@ -197,9 +197,9 @@ export class VoiceTools {
     this.idleMs = deps.idleMs ?? DEFAULT_IDLE_MS;
   }
 
-  // --- Agente de ayuda: identidad, parcela y permisos ---
+  // --- Help agent: identity, plot and permissions ---
 
-  /** `resolve_farmer`: candidatos por caller ID. El número no es prueba de identidad: solo nombres, sin datos. */
+  /** `resolve_farmer`: candidates by caller ID. The number is not proof of identity: names only, no data. */
   async resolveFarmer(raw: unknown): Promise<ToolReply> {
     const input = parse(ResolveFarmerInput, raw);
     const session = this.session(input.session_id);
@@ -229,7 +229,7 @@ export class VoiceTools {
     });
     if (!resolved.ok) {
       log("warn", "tool_resolve_farmer_failed", { correlation_id: input.session_id, code: resolved.code });
-      return ok({ status: "unavailable", instruction: `No pudiste consultar su registro por una falla técnica. ${UNKNOWN_CALLER}` });
+      return ok({ status: "unavailable", instruction: `You couldn't look up their record because of a technical issue. ${UNKNOWN_CALLER}` });
     }
 
     help.candidates = resolved.data.candidates;
@@ -248,22 +248,22 @@ export class VoiceTools {
       candidates: numbered(help.candidates.map((c) => c.label)),
       instruction:
         help.candidates.length === 1
-          ? `Pregunta si hablas con ${only!.label}. Si dice que sí, llama a confirm_farmer con candidate_number 1. No digas nada más de su registro antes de confirmar.`
-          : "Este teléfono lo comparten varias personas. Pregunta con cuál hablas, leyendo solo los nombres, y llama a confirm_farmer con su número. No digas nada más de nadie antes de confirmar.",
+          ? `Ask whether you're speaking with ${only!.label}. If they say yes, call confirm_farmer with candidate_number 1. Don't say anything else about their record before confirming.`
+          : "Several people share this phone. Ask which one you're speaking with, reading only the names, and call confirm_farmer with their number. Don't say anything else about anyone before confirming.",
     });
   }
 
-  /** `confirm_farmer`: el agricultor dijo quién es; habilita sus parcelas y permisos para esta llamada. */
+  /** `confirm_farmer`: the farmer said who they are; unlocks their plots and permissions for this call. */
   async confirmFarmer(raw: unknown): Promise<ToolReply> {
     const input = parse(ConfirmFarmerInput, raw);
     const session = this.session(input.session_id);
     const help = session.help;
     if (!help?.phone_e164 || help.candidates.length === 0) {
-      return ok({ confirmed: false, instruction: "No hay a quién confirmar. Si no lo hiciste, llama primero a resolve_farmer; si no está registrado, sigue como número no registrado." });
+      return ok({ confirmed: false, instruction: "There is no one to confirm. If you haven't, call resolve_farmer first; if they aren't registered, continue as an unregistered number." });
     }
     const candidate = help.candidates[input.candidate_number - 1];
     if (!candidate) {
-      return ok({ confirmed: false, candidates: numbered(help.candidates.map((c) => c.label)), instruction: `Usa un número entre 1 y ${help.candidates.length}.` });
+      return ok({ confirmed: false, candidates: numbered(help.candidates.map((c) => c.label)), instruction: `Use a number between 1 and ${help.candidates.length}.` });
     }
 
     const confirmed = await this.deps.client.resolveContact({
@@ -275,7 +275,7 @@ export class VoiceTools {
       is_demo: this.deps.isDemo,
     });
     if (!confirmed.ok && confirmed.code === "CANDIDATE_TOKEN_INVALID") {
-      // El backend firma cada candidato por 15 minutos: se piden nuevos y se vuelve a preguntar.
+      // The backend signs each candidate for 15 minutes: fetch fresh ones and ask again.
       const fresh = await this.deps.client.resolveContact({
         schema_version: SCHEMA_VERSION,
         session_id: input.session_id,
@@ -289,12 +289,12 @@ export class VoiceTools {
       return ok({
         confirmed: false,
         candidates: numbered(help.candidates.map((c) => c.label)),
-        instruction: "La confirmación venció. Vuelve a preguntar con quién hablas y llama otra vez a confirm_farmer.",
+        instruction: "The confirmation expired. Ask again who you're speaking with and call confirm_farmer again.",
       });
     }
     if (!confirmed.ok || !confirmed.data.confirmed) {
       log("warn", "tool_confirm_farmer_failed", { correlation_id: input.session_id, code: confirmed.ok ? "NOT_CONFIRMED" : confirmed.code });
-      return ok({ confirmed: false, instruction: `No pudiste confirmar su registro por una falla técnica. ${UNKNOWN_CALLER}` });
+      return ok({ confirmed: false, instruction: `You couldn't confirm their record because of a technical issue. ${UNKNOWN_CALLER}` });
     }
 
     const farmer = confirmed.data.confirmed;
@@ -310,28 +310,28 @@ export class VoiceTools {
 
     const plotInstruction =
       farmer.plots.length === 0
-        ? "No tiene parcelas registradas: no hay evaluación. Sigue con los permisos, pídele que describa el problema y guarda el reporte con completeness \"partial\"."
+        ? "They have no registered plots: there is no assessment. Continue with the permissions, ask them to describe the problem and save the report with completeness \"partial\"."
         : farmer.plots.length === 1
-          ? "Llama a get_plot_context."
-          : "Pregunta de cuál parcela se trata, leyendo sus nombres, y llama a get_plot_context con su número.";
+          ? "Call get_plot_context."
+          : "Ask which plot this is about, reading their names, and call get_plot_context with its number.";
     return ok({
       confirmed: true,
       farmer_name: candidate.label,
       plots: numbered(farmer.plots.map((p) => p.label)),
       report_permission: permissionState(farmer.consent.reports),
-      /** Permisos que nunca respondió: se preguntan uno por uno. */
+      /** Permissions they never answered: asked one at a time. */
       ask_permissions: (["notifications", "followup_calls"] as const).filter((scope) => farmer.consent[scope] === null),
       instruction: plotInstruction,
     });
   }
 
-  /** `get_plot_context`: solo una parcela del agricultor confirmado; queda fija para el resto de la llamada. */
+  /** `get_plot_context`: only a plot of the confirmed farmer; it stays fixed for the rest of the call. */
   async getPlotContext(raw: unknown): Promise<ToolReply> {
     const input = parse(GetPlotContextInput, raw);
     const session = this.session(input.session_id);
     const farmer = session.help?.farmer;
     if (!farmer) {
-      return ok({ found: false, instruction: "Primero confirma con quién hablas (confirm_farmer). Nunca elijas una parcela por tu cuenta." });
+      return ok({ found: false, instruction: "First confirm who you're speaking with (confirm_farmer). Never pick a plot on your own." });
     }
     const number = input.plot_number ?? (farmer.plots.length === 1 ? 1 : null);
     const plot = number === null ? undefined : farmer.plots[number - 1];
@@ -339,12 +339,12 @@ export class VoiceTools {
       return ok({
         found: false,
         plots: numbered(farmer.plots.map((p) => p.label)),
-        instruction: farmer.plots.length === 0 ? "No tiene parcelas registradas." : "Pregunta de cuál parcela se trata y llama a get_plot_context con su número.",
+        instruction: farmer.plots.length === 0 ? "They have no registered plots." : "Ask which plot this is about and call get_plot_context with its number.",
       });
     }
 
     const context = await this.deps.client.getPlotContext(plot.plot_id, input.session_id);
-    // Sin contexto la parcela sigue confirmada; cultivo y variedad quedan como desconocidos (null).
+    // Without context the plot is still confirmed; crop and variety stay unknown (null).
     session.plot = context.ok
       ? { plot_id: plot.plot_id, crop: context.data.crop, variety: context.data.variety }
       : { plot_id: plot.plot_id, crop: null, variety: null };
@@ -357,25 +357,25 @@ export class VoiceTools {
       variety: session.plot.variety,
       has_open_case: context.ok ? context.data.active_cases.length > 0 : null,
       instruction:
-        "Parcela confirmada. No leas datos técnicos. Sigue con los permisos que falten y pídele que describa qué ve en sus plantas.",
+        "Plot confirmed. Don't read out technical data. Continue with any missing permissions and ask them to describe what they see on their plants.",
     });
   }
 
-  /** `record_consent`: tres permisos separados (sección 17); se guardan solo para un agricultor confirmado. */
+  /** `record_consent`: three separate permissions (section 17); only stored for a confirmed farmer. */
   async recordConsent(raw: unknown): Promise<ToolReply> {
     const input = parse(RecordConsentInput, raw);
     const session = this.session(input.session_id);
     const help = session.help;
-    if (!help) return ok({ saved: false, instruction: "Primero llama a resolve_farmer." });
+    if (!help) return ok({ saved: false, instruction: "Call resolve_farmer first." });
 
     for (const scope of ["reports", "notifications", "followup_calls"] as const) {
       if (input[scope] !== null) help.consent[scope] = input[scope];
     }
-    const next = input.reports === false ? REPORTS_DECLINED : "Continúa.";
-    // Número no registrado: el permiso vale solo para esta llamada.
+    const next = input.reports === false ? REPORTS_DECLINED : "Continue.";
+    // Unregistered number: the permission is valid for this call only.
     if (!help.farmer) return ok({ saved: true, valid_for_this_call_only: true, instruction: next });
 
-    // Confirmar este reporte cuando ya había permiso no se reenvía; negarlo no revoca un permiso que ya existía.
+    // Confirming this report when permission already existed isn't resent; declining doesn't revoke an existing permission.
     const reports = help.farmer.stored_consent.reports === true ? null : input.reports;
     const { notifications, followup_calls } = input;
     if (reports === null && notifications === null && followup_calls === null) return ok({ saved: true, instruction: next });
@@ -397,12 +397,12 @@ export class VoiceTools {
     );
     log("info", "tool_record_consent", { correlation_id: input.session_id, outcome: outcome.status });
     if (outcome.status === "saved") return ok({ saved: true, instruction: next });
-    return ok({ saved: false, instruction: `No digas que sus permisos quedaron guardados; el sistema lo reintentará. ${next}` });
+    return ok({ saved: false, instruction: `Don't say their permissions were saved; the system will retry. ${next}` });
   }
 
-  // --- Ambos agentes ---
+  // --- Both agents ---
 
-  /** `submit_followup`: todas las respuestas del seguimiento en una sola petición (10.4). */
+  /** `submit_followup`: all the follow-up answers in a single request (10.4). */
   async submitFollowup(raw: unknown): Promise<ToolReply> {
     const input = parse(SubmitFollowupInput, raw);
     this.session(input.session_id);
@@ -428,7 +428,7 @@ export class VoiceTools {
       const closed = outcome.code === "FOLLOWUP_CLOSED";
       return ok({
         registered: false,
-        instruction: closed ? "Este seguimiento ya estaba registrado. NO digas que lo registraste ahora; agradece y despídete." : NOT_REGISTERED_FAILED,
+        instruction: closed ? "This follow-up was already recorded. Do NOT say you recorded it now; thank them and say goodbye." : NOT_REGISTERED_FAILED,
       });
     }
 
@@ -439,19 +439,19 @@ export class VoiceTools {
       resolved: outcome.data.resolution_id !== null,
       next_followup_scheduled: outcome.data.next_followup_at !== null,
       instruction: worse
-        ? "Quedó registrado. Como empeoró, pregúntale qué ve ahora en sus plantas y llama a assess_observation con su descripción, como en una llamada de ayuda."
+        ? "It's been recorded. Since it got worse, ask what they see on their plants now and call assess_observation with their description, as in a help call."
         : outcome.data.resolution_id !== null
-          ? "Quedó registrado. Agradece, alégrate de que se resolvió y despídete."
-          : "Quedó registrado. Agradece, dile que le volveremos a preguntar en unos días y despídete.",
+          ? "It's been recorded. Thank them, say you're glad it's resolved and say goodbye."
+          : "It's been recorded. Thank them, tell them we'll check in again in a few days and say goodbye.",
     });
   }
 
-  /** `assess_observation`: necesidades de información u orientación, con los límites de la sección 17. */
+  /** `assess_observation`: information needs or guidance, within the limits of section 17. */
   async assessObservation(raw: unknown): Promise<ToolReply> {
     const input = parse(AssessObservationInput, raw);
     const session = this.session(input.session_id);
     const help = session.help;
-    // En ayuda manda la parcela confirmada, nunca la que diga el modelo.
+    // In help calls the confirmed plot wins, never the one the model names.
     const plotId = help ? (session.plot?.plot_id ?? null) : input.plot_id;
     if (help) {
       if (help.consent.reports === false) return ok({ disposition: "declined", instruction: REPORTS_DECLINED });
@@ -462,7 +462,7 @@ export class VoiceTools {
       return ok({
         disposition: "no_plot",
         instruction:
-          "Sin parcela confirmada no hay evaluación. Dile que un técnico revisará su caso y llama a submit_report con completeness \"partial\".",
+          "Without a confirmed plot there is no assessment. Tell them a technician will review their case and call submit_report with completeness \"partial\".",
       });
     }
 
@@ -471,13 +471,13 @@ export class VoiceTools {
       return ok({
         disposition: "limit_reached",
         instruction:
-          "No hagas más preguntas. Di que con lo que te contó un técnico revisará su caso y llama a submit_report con completeness \"partial\".",
+          "Don't ask any more questions. Say that a technician will review their case with what they told you and call submit_report with completeness \"partial\".",
       });
     }
 
     if (!session.plot || session.plot.plot_id !== plotId) {
       const context = await this.deps.client.getPlotContext(plotId, input.session_id);
-      // Sin contexto la evaluación sigue; cultivo y variedad quedan como desconocidos (null).
+      // Without context the assessment goes ahead; crop and variety stay unknown (null).
       session.plot = context.ok
         ? { plot_id: plotId, crop: context.data.crop, variety: context.data.variety }
         : { plot_id: plotId, crop: null, variety: null };
@@ -507,14 +507,14 @@ export class VoiceTools {
       return ok({
         disposition: "unavailable",
         instruction:
-          "Di que no se pudo completar la evaluación, que un técnico revisará su caso y que habrá seguimiento. NO inventes orientación. Llama a submit_report con completeness \"partial\".",
+          "Say the assessment couldn't be completed, that a technician will review their case and that there will be a follow-up. Do NOT make up guidance. Call submit_report with completeness \"partial\".",
       });
     }
     session.last_assessment_id = assessed.data.assessment_id;
     return ok(forAgent(assessed.data, MAX_QUESTIONS - asked.size));
   }
 
-  /** `submit_report`: guarda la observación confirmada por el agricultor. */
+  /** `submit_report`: saves the observation the farmer confirmed. */
   async submitReport(raw: unknown): Promise<ToolReply> {
     const input = parse(SubmitReportInput, raw);
     const session = this.session(input.session_id);
@@ -524,7 +524,7 @@ export class VoiceTools {
     }
 
     const outcome = await this.saveReport(input.session_id, session, {
-      // En ayuda, la parcela confirmada (o ninguna, para un número no registrado); nunca la del modelo.
+      // In help calls, the confirmed plot (or none, for an unregistered number); never the model's.
       plot_id: help ? (session.plot?.plot_id ?? null) : input.plot_id,
       provider_reference: input.conversation_id ?? (help ? input.session_id : null),
       user_statement: input.user_statement,
@@ -535,14 +535,14 @@ export class VoiceTools {
     log("info", "tool_submit_report", { correlation_id: input.session_id, outcome: outcome.status });
 
     if (outcome.status === "saved") {
-      return ok({ registered: true, instruction: "Quedó registrado. Puedes decirlo, agradece y despídete." });
+      return ok({ registered: true, instruction: "It's been recorded. You can say so; thank them and say goodbye." });
     }
     return ok({ registered: false, instruction: outcome.status === "pending" ? NOT_REGISTERED_PENDING : NOT_REGISTERED_FAILED });
   }
 
   /**
-   * Llamadas de ayuda que se cortaron sin `submit_report` (sección 4): si había permiso y una
-   * descripción, se guarda solo lo recibido como `completeness: "partial"`.
+   * Help calls that dropped without `submit_report` (section 4): if there was permission and a
+   * description, only what was received is saved as `completeness: "partial"`.
    */
   async sweep(): Promise<void> {
     const now = this.now().getTime();
@@ -586,7 +586,7 @@ export class VoiceTools {
         is_demo: this.deps.isDemo,
         ...fields,
       },
-      // Estable por sesión y turno: si el modelo repite la herramienta, el backend devuelve el original.
+      // Stable per session and turn: if the model repeats the tool call, the backend returns the original.
       reportIdempotencyKey(sessionId, session.reports),
     );
   }
@@ -602,7 +602,7 @@ export class VoiceTools {
   }
 }
 
-/** Con permiso dado en esta llamada, o guardado antes y no negado ahora. */
+/** With permission given in this call, or stored earlier and not declined now. */
 function reportAllowed(help: HelpState): boolean {
   if (help.consent.reports !== null) return help.consent.reports;
   return help.farmer?.stored_consent.reports === true;
@@ -612,12 +612,12 @@ function permissionState(value: boolean | null): "granted" | "denied" | "never_a
   return value === true ? "granted" : value === false ? "denied" : "never_asked";
 }
 
-/** El modelo ve "1 Rosa, 2 Marta"; los tokens e IDs se quedan en comunicaciones. */
+/** The model sees "1 Rosa, 2 Marta"; tokens and IDs stay in communications. */
 function numbered(labels: string[]): { number: number; label: string }[] {
   return labels.map((label, i) => ({ number: i + 1, label }));
 }
 
-/** Lo que el agente necesita para hablar; nada de `reason` interno ni IDs de datasets. */
+/** What the agent needs to speak; no internal `reason` or dataset IDs. */
 function forAgent(assessment: AssessmentResponse, questionsLeft: number) {
   const needs = [...assessment.information_needs].sort((a, b) => a.priority - b.priority).map(({ reason: _, ...need }) => need);
   const base = {
@@ -632,7 +632,7 @@ function forAgent(assessment: AssessmentResponse, questionsLeft: number) {
       information_needs: needs,
       questions_left: questionsLeft,
       instruction:
-        "Haz UNA sola pregunta: la necesidad de priority 1, en palabras sencillas según farmer_hint, nunca con el nombre técnico. Normaliza la respuesta según answer_type; si dice que no sabe, envíala con value null y unknown true. Luego vuelve a llamar a assess_observation con todas las respuestas y asked_need_codes.",
+        "Ask ONE question only: the priority 1 need, in plain words based on farmer_hint, never with the technical name. Normalize the answer according to answer_type; if they say they don't know, send it with value null and unknown true. Then call assess_observation again with all the answers and asked_need_codes.",
     };
   }
   if (assessment.disposition === "advise") {
@@ -641,14 +641,14 @@ function forAgent(assessment: AssessmentResponse, questionsLeft: number) {
       recommendations: assessment.recommendations.map((r) => r.text),
       resolved_case_mentions: assessment.resolved_case_mentions.map((m) => ({ summary: m.summary_for_speech, verification: m.verification })),
       instruction:
-        "Aclara que esto no confirma ninguna enfermedad y que un técnico lo revisará. Comunica las recomendaciones con tus palabras. Si hay un caso resuelto, cuéntalo como experiencia de otro agricultor (si verification no es \"verified\", di que no está verificado). Después llama a submit_report con completeness \"sufficient\".",
+        "Make clear this doesn't confirm any disease and that a technician will review it. Convey the recommendations in your own words, in English. If there is a resolved case, tell it as another farmer's experience (if verification is not \"verified\", say it isn't verified). Then call submit_report with completeness \"sufficient\".",
     };
   }
   return {
     ...base,
     disposition: "refer" as const,
     instruction:
-      "Di que con lo que te contó no puedes darle una orientación segura y que un técnico revisará su caso. NO recomiendes productos ni dosis. Llama a submit_report con completeness \"partial\".",
+      "Say that with what they told you, you can't give safe guidance and that a technician will review their case. Do NOT recommend products or doses. Call submit_report with completeness \"partial\".",
   };
 }
 

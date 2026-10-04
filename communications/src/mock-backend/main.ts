@@ -5,17 +5,17 @@ import { createMockBackend } from "./server.ts";
 
 const token = process.env.MOCK_SERVICE_TOKEN;
 if (!token) {
-  console.error("Falta MOCK_SERVICE_TOKEN (ver .env.example).");
+  console.error("MOCK_SERVICE_TOKEN is missing (see .env.example).");
   process.exit(1);
 }
 
-/** MOCK_PHONE_OVERRIDES="contact_demo_01=+52...,contact_demo_02=+52..." — solo teléfonos de prueba propios. */
+/** MOCK_PHONE_OVERRIDES="contact_demo_01=+52...,contact_demo_02=+52..." — only your own test phones. */
 function parseOverrides(raw: string | undefined): Record<string, string> {
   const overrides: Record<string, string> = {};
   for (const pair of (raw ?? "").split(",").map((p) => p.trim()).filter(Boolean)) {
     const [contactId, phone] = pair.split("=").map((p) => p.trim());
     if (!contactId || !contacts.some((c) => c.id === contactId) || !PhoneE164.safeParse(phone).success) {
-      console.error(`MOCK_PHONE_OVERRIDES inválido en "${contactId ?? pair}": usa contact_id=+E164`);
+      console.error(`Invalid MOCK_PHONE_OVERRIDES at "${contactId ?? pair}": use contact_id=+E164`);
       process.exit(1);
     }
     overrides[contactId] = phone!;

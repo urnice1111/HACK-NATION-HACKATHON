@@ -1,16 +1,16 @@
 /**
- * Mock HTTP del backend /v1 (Integrante 3) y del asesor (Integrante 2), con
- * cuerpos del contrato v2, para desarrollar las herramientas de voz y los
- * webhooks sin el backend real. Las rutas marcadas ACORDADO no están en la v2
- * pero el backend ya las implementa igual (ver src/contracts/resources.ts).
- * Respeta las convenciones de la sección 8: errores uniformes, request_id,
- * correlation_id, Idempotency-Key con 409 ante otro cuerpo, `null` como
- * desconocido e `is_demo` en todo. Solo acepta datos demo.
+ * HTTP mock of the /v1 backend (Member 3) and the advisor (Member 2), with v2
+ * contract bodies, to build the voice tools and webhooks without the real
+ * backend. Routes marked AGREED aren't in v2 but the backend already
+ * implements them the same way (see src/contracts/resources.ts).
+ * Follows section 8's conventions: uniform errors, request_id,
+ * correlation_id, Idempotency-Key with 409 on a different body, `null` as
+ * unknown and `is_demo` everywhere. Only accepts demo data.
  *
- * Escenarios de prueba con la cabecera `X-Mock-Scenario` (solo en el mock):
- *   advisor_unavailable  → /v1/assessments responde 503 reintentable
- *   backend_unavailable  → cualquier ruta responde 503 antes de procesar
- *   delay:<ms>           → procesa y tarda en responder (timeout ambiguo)
+ * Test scenarios via the `X-Mock-Scenario` header (mock only):
+ *   advisor_unavailable  → /v1/assessments answers a retryable 503
+ *   backend_unavailable  → any route answers 503 before processing
+ *   delay:<ms>           → processes and answers late (ambiguous timeout)
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
@@ -65,7 +65,7 @@ interface Reply {
 
 function requireDemo(body: { is_demo: boolean }): void {
   if (!body.is_demo) {
-    throw new HttpError(422, "DEMO_MODE_MISMATCH", "El mock solo acepta datos demo", {
+    throw new HttpError(422, "DEMO_MODE_MISMATCH", "The mock only accepts demo data", {
       details: [{ field: "is_demo", reason: "demo_only" }],
     });
   }
@@ -74,7 +74,7 @@ function requireDemo(body: { is_demo: boolean }): void {
 function requireIdempotencyKey(req: IncomingMessage): string {
   const key = headerValue(req, "idempotency-key");
   if (!key || key.length > 200) {
-    throw new HttpError(422, "VALIDATION_ERROR", "Idempotency-Key es obligatoria", {
+    throw new HttpError(422, "VALIDATION_ERROR", "Idempotency-Key is required", {
       details: [{ field: "Idempotency-Key", reason: "required" }],
     });
   }
@@ -90,20 +90,20 @@ function consentOf(contact: FixtureContact | undefined): ContactConsent {
   };
 }
 
-/** Seguimientos que aún admiten respuesta (una respuesta tardía a `no_response` se acepta). */
+/** Follow-ups that still accept a response (a late response to `no_response` is accepted). */
 const OPEN_FOLLOWUP_STATUSES = new Set(["scheduled", "contacting", "no_response"]);
 
 export function createMockBackend(options: MockBackendOptions): { server: Server; state: MockState } {
-  if (!options.serviceToken) throw new Error("serviceToken es obligatorio");
+  if (!options.serviceToken) throw new Error("serviceToken is required");
   const state = new MockState(options.now, options.phoneOverrides);
 
-  /** Repite el resultado original o devuelve 409 si la clave llega con otro cuerpo. */
+  /** Replays the original result or returns 409 if the key arrives with a different body. */
   function idempotent(scope: string, key: string, body: unknown, run: () => Reply): Reply {
     const id = `${scope}\u0000${key}`;
     const hash = fingerprint(body);
     const previous = state.idempotency.get(id);
     if (previous && previous.fingerprint !== hash) {
-      throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "La Idempotency-Key ya se usó con otro cuerpo");
+      throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "The Idempotency-Key was already used with a different body");
     }
     if (previous) return { status: previous.status, body: previous.body, headers: { "Idempotency-Replayed": "true" } };
     const reply = run();
@@ -131,7 +131,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     if (body.confirm_candidate_token !== null) {
       const farmerId = state.redeemCandidateToken(body.confirm_candidate_token, body.session_id, body.phone_e164);
       if (!farmerId) {
-        throw new HttpError(403, "CANDIDATE_TOKEN_INVALID", "El candidato no es válido para esta sesión");
+        throw new HttpError(403, "CANDIDATE_TOKEN_INVALID", "The candidate is not valid for this session");
       }
       const farmer = state.farmers.find((f) => f.id === farmerId)!;
       const contact = state.contactOf(farmerId);
@@ -164,9 +164,9 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
   function plotContext(ctx: Ctx, plotId: string): Reply {
     const plot = state.plots.find((p) => p.id === plotId);
-    if (!plot) throw new HttpError(404, "NOT_FOUND", "Parcela inexistente");
+    if (!plot) throw new HttpError(404, "NOT_FOUND", "Plot not found");
     if (!state.sessionMayAccessPlot(safeIdHeader(ctx.req, "x-session-id"), plotId)) {
-      throw new HttpError(403, "PLOT_NOT_CONFIRMED", "La sesión no ha confirmado esta parcela");
+      throw new HttpError(403, "PLOT_NOT_CONFIRMED", "The session has not confirmed this plot");
     }
     const activeCases = state.cases.filter((c) => c.plot_id === plotId && c.status !== "resolved");
     const caseIds = new Set(activeCases.map((c) => c.id));
@@ -197,11 +197,11 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
   function assessment(ctx: Ctx, raw: unknown): Reply {
     if (ctx.scenario === "advisor_unavailable") {
-      throw new HttpError(503, "ADVISOR_UNAVAILABLE", "El asesor no está disponible", { retryable: true });
+      throw new HttpError(503, "ADVISOR_UNAVAILABLE", "The advisor is unavailable", { retryable: true });
     }
     const body = parseBody(AssessmentRequest, raw);
     requireDemo(body);
-    if (!state.plots.some((p) => p.id === body.plot_id)) throw new HttpError(404, "NOT_FOUND", "Parcela inexistente");
+    if (!state.plots.some((p) => p.id === body.plot_id)) throw new HttpError(404, "NOT_FOUND", "Plot not found");
     return {
       status: 200,
       body: assess(body, { environment: state.environment[body.plot_id] ?? null, resolutions: state.resolutions }),
@@ -215,15 +215,15 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
     return idempotent("POST /v1/reports", key, body, () => {
       if (body.plot_id !== null) {
-        if (!state.plots.some((p) => p.id === body.plot_id)) throw new HttpError(404, "NOT_FOUND", "Parcela inexistente");
+        if (!state.plots.some((p) => p.id === body.plot_id)) throw new HttpError(404, "NOT_FOUND", "Plot not found");
         if (body.channel !== "operator" && !state.sessionMayAccessPlot(body.session_id, body.plot_id)) {
-          throw new HttpError(403, "PLOT_NOT_CONFIRMED", "La sesión no ha confirmado esta parcela");
+          throw new HttpError(403, "PLOT_NOT_CONFIRMED", "The session has not confirmed this plot");
         }
       }
       if (body.case_id !== null) {
         const existing = state.cases.find((c) => c.id === body.case_id);
         if (!existing || existing.plot_id !== body.plot_id) {
-          throw new HttpError(422, "VALIDATION_ERROR", "case_id no corresponde a la parcela", {
+          throw new HttpError(422, "VALIDATION_ERROR", "case_id does not belong to the plot", {
             details: [{ field: "case_id", reason: "mismatch" }],
           });
         }
@@ -270,20 +270,20 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
   function getReport(reportId: string): Reply {
     const report = state.reports.get(reportId);
-    if (!report) throw new HttpError(404, "NOT_FOUND", "Reporte inexistente");
+    if (!report) throw new HttpError(404, "NOT_FOUND", "Report not found");
     return { status: 200, body: report };
   }
 
-  /** ACORDADO: `GET /v1/followups?status=…&due_before=…`, con resumen del caso y contacto. */
+  /** AGREED: `GET /v1/followups?status=…&due_before=…`, with case summary and contact. */
   function listFollowups(ctx: Ctx): Reply {
     const statusParam = ctx.query.get("status");
     const status = statusParam === null ? null : FollowupStatus.safeParse(statusParam);
     if (status && !status.success) {
-      throw new HttpError(422, "VALIDATION_ERROR", "status inválido", { details: [{ field: "status", reason: "invalid_enum_value" }] });
+      throw new HttpError(422, "VALIDATION_ERROR", "invalid status", { details: [{ field: "status", reason: "invalid_enum_value" }] });
     }
     const dueBefore = ctx.query.get("due_before");
     if (dueBefore !== null && Number.isNaN(Date.parse(dueBefore))) {
-      throw new HttpError(422, "VALIDATION_ERROR", "due_before inválido", { details: [{ field: "due_before", reason: "invalid_format" }] });
+      throw new HttpError(422, "VALIDATION_ERROR", "invalid due_before", { details: [{ field: "due_before", reason: "invalid_format" }] });
     }
 
     const items: FollowupListItem[] = [];
@@ -317,7 +317,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
           preferred_language: farmer.preferred_language,
           timezone: farmer.timezone,
           allowed_hours: contact.allowed_hours,
-          // null (nunca preguntado) no autoriza llamadas ni avisos.
+          // null (never asked) authorizes neither calls nor alerts.
           followup_call_consent: contact.followup_call_consent === true,
           notification_consent: contact.notification_consent === true,
         },
@@ -328,7 +328,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     return { status: 200, body };
   }
 
-  /** ACORDADO: `POST /v1/followups/{id}/attempts`. */
+  /** AGREED: `POST /v1/followups/{id}/attempts`. */
   function followupAttempt(ctx: Ctx, followupId: string, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(FollowupAttemptRequest, raw);
@@ -336,9 +336,9 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
     return idempotent(`POST /v1/followups/${followupId}/attempts`, key, body, () => {
       const followup = state.followups.find((f) => f.id === followupId);
-      if (!followup) throw new HttpError(404, "NOT_FOUND", "Seguimiento inexistente");
+      if (!followup) throw new HttpError(404, "NOT_FOUND", "Follow-up not found");
       if (!OPEN_FOLLOWUP_STATUSES.has(followup.status)) {
-        throw new HttpError(409, "FOLLOWUP_CLOSED", "El seguimiento ya no admite intentos");
+        throw new HttpError(409, "FOLLOWUP_CLOSED", "The follow-up no longer accepts attempts");
       }
       const linkedCase = state.cases.find((c) => c.id === followup.case_id)!;
 
@@ -349,10 +349,10 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
         const farmer = state.farmerOfPlot(linkedCase.plot_id);
         if (farmer) state.grantFollowupSession(body.session_id, farmer.id, linkedCase.plot_id);
       }
-      // Sin respuesta no cambia el caso ni el riesgo: solo el estado del seguimiento.
+      // No response changes neither the case nor the risk: only the follow-up status.
       followup.status = body.status;
       if (body.status === "no_response" && followup.channel === "voice") {
-        // Como el backend: el scheduler reprograma el reintento (2 min en demo); agotadas las llamadas, el SMS va ya.
+        // Like the backend: the scheduler reschedules the retry (2 min in demo); once calls are used up, the SMS goes now.
         const delay = followup.attempt_count < FOLLOWUP_CALL_ATTEMPTS ? FOLLOWUP_RETRY_MS : 0;
         followup.due_at = new Date(Date.parse(state.nowIso()) + delay).toISOString();
       }
@@ -376,13 +376,13 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
     return idempotent(`POST /v1/followups/${followupId}/responses`, key, body, () => {
       const followup = state.followups.find((f) => f.id === followupId);
-      if (!followup) throw new HttpError(404, "NOT_FOUND", "Seguimiento inexistente");
+      if (!followup) throw new HttpError(404, "NOT_FOUND", "Follow-up not found");
       const linkedCase = state.cases.find((c) => c.id === followup.case_id)!;
       if (!state.sessionMayAccessPlot(body.session_id, linkedCase.plot_id)) {
-        throw new HttpError(403, "PLOT_NOT_CONFIRMED", "La sesión no ha confirmado la parcela del seguimiento");
+        throw new HttpError(403, "PLOT_NOT_CONFIRMED", "The session has not confirmed the follow-up's plot");
       }
       if (!OPEN_FOLLOWUP_STATUSES.has(followup.status)) {
-        throw new HttpError(409, "FOLLOWUP_CLOSED", "El seguimiento ya no admite respuestas");
+        throw new HttpError(409, "FOLLOWUP_CLOSED", "The follow-up no longer accepts responses");
       }
 
       const receivedAt = state.nowIso();
@@ -415,7 +415,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
       let resolutionId: string | null = null;
       let nextFollowupAt: string | null = null;
       if (body.status_reported === "resolved") {
-        // Una sola resolución por caso, aunque lleguen dos seguimientos "resueltos".
+        // A single resolution per case, even if two "resolved" follow-ups arrive.
         const existing = state.resolutions.find((r) => r.case_id === linkedCase.id);
         if (existing) {
           resolutionId = existing.id;
@@ -428,7 +428,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
             symptoms: linkedCase.symptoms,
             resolved_at: body.change_noticed_at ?? receivedAt,
             solution_statement: body.actions_taken ?? body.user_statement,
-            // Los normaliza el Integrante 2; mientras tanto null y se conserva el texto.
+            // Member 2 normalizes them; meanwhile null, and the text is kept.
             solution_codes: null,
             matches_protocol: null,
             outcome: "resolved",
@@ -443,7 +443,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
         linkedCase.status = "resolved";
         linkedCase.closed_at = receivedAt;
       } else {
-        // Mejoría, persistencia, empeoramiento o desconocido: otro seguimiento (y revisión si empeora o sigue igual).
+        // Improved, same, worse or unknown: another follow-up (and review if worse or the same).
         nextFollowupAt = state.scheduleFollowup(linkedCase.id).due_at;
       }
 
@@ -464,7 +464,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     });
   }
 
-  /** ACORDADO: `POST /v1/consents`. Solo para el agricultor que la sesión confirmó. */
+  /** AGREED: `POST /v1/consents`. Only for the farmer the session confirmed. */
   function recordConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(ConsentRequest, raw);
@@ -472,10 +472,10 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
 
     return idempotent("POST /v1/consents", key, body, () => {
       if (state.farmerOfSession(body.session_id) !== body.farmer_id) {
-        throw new HttpError(403, "FARMER_NOT_CONFIRMED", "La sesión no ha confirmado a este agricultor");
+        throw new HttpError(403, "FARMER_NOT_CONFIRMED", "The session has not confirmed this farmer");
       }
       const contact = state.contactOf(body.farmer_id);
-      if (!contact) throw new HttpError(404, "NOT_FOUND", "Contacto inexistente");
+      if (!contact) throw new HttpError(404, "NOT_FOUND", "Contact not found");
       if (body.reports !== null) contact.report_consent = body.reports;
       if (body.notifications !== null) contact.notification_consent = body.notifications;
       if (body.followup_calls !== null) contact.followup_call_consent = body.followup_calls;
@@ -488,7 +488,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     });
   }
 
-  /** ACORDADO: `POST /v1/consents/revocations` ("BAJA" por SMS). Un teléfono desconocido revoca 0 contactos. */
+  /** AGREED: `POST /v1/consents/revocations` ("ALERTS OFF" by SMS). An unknown phone revokes 0 contacts. */
   function revokeConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(ConsentRevocationRequest, raw);
@@ -509,10 +509,10 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     if (method === "GET" && path === "/v1/health") return { status: 200, body: { status: "ok", is_demo: true } };
 
     if (!bearerMatches(headerValue(ctx.req, "authorization"), options.serviceToken)) {
-      throw new HttpError(401, "UNAUTHORIZED", "Credenciales de servicio ausentes o inválidas");
+      throw new HttpError(401, "UNAUTHORIZED", "Missing or invalid service credentials");
     }
     if (ctx.scenario === "backend_unavailable") {
-      throw new HttpError(503, "SERVICE_UNAVAILABLE", "Dependencia temporalmente indisponible", { retryable: true });
+      throw new HttpError(503, "SERVICE_UNAVAILABLE", "Dependency temporarily unavailable", { retryable: true });
     }
 
     let m: RegExpMatchArray | null;
@@ -530,7 +530,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     }
     if (method === "POST" && path === "/v1/consents") return recordConsent(ctx, await readJson(ctx.req));
     if (method === "POST" && path === "/v1/consents/revocations") return revokeConsent(ctx, await readJson(ctx.req));
-    throw new HttpError(404, "NOT_FOUND", "Ruta inexistente");
+    throw new HttpError(404, "NOT_FOUND", "Route not found");
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -553,7 +553,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
       reply = await route(ctx, method, path);
     } catch (error) {
       const httpError =
-        error instanceof HttpError ? error : new HttpError(500, "INTERNAL_ERROR", "Error interno del mock", { retryable: true });
+        error instanceof HttpError ? error : new HttpError(500, "INTERNAL_ERROR", "Mock internal error", { retryable: true });
       if (!(error instanceof HttpError)) log("error", "unhandled_error", { request_id: requestId, error: String(error) });
       reply = { status: httpError.status, body: httpError.toBody(requestId) };
     }

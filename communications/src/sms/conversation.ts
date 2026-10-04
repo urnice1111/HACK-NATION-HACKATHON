@@ -1,19 +1,19 @@
 /**
- * Conversación por SMS: identidad → parcela → consentimiento → observación →
- * preguntas del asesor → reporte. Las respuestas a un seguimiento por SMS se
- * delegan en `FollowupSmsFlow`.
+ * SMS conversation: identity → plot → consent → observation → advisor
+ * questions → report. Replies to an SMS follow-up are delegated to
+ * `FollowupSmsFlow`.
  *
- * Reglas (CLAUDE.md, secciones 4, 15 y 17):
- *  - El número no es prueba de identidad: siempre se confirma el candidato.
- *  - Nunca se elige una parcela al azar; sin confirmación el reporte va sin parcela.
- *  - Sin consentimiento no se guarda nada. Tres permisos separados (reportes,
- *    avisos, llamadas de seguimiento); solo se preguntan los que faltan, y cada
- *    reporte se confirma antes de guardarse.
- *  - "BAJA" (y STOP) revocan avisos y seguimientos en el backend.
- *  - Solo se dice "quedó registrado" tras un 201 del backend.
- *  - Si falla el asesor, se dice y se guarda el reporte sin orientación inventada.
- *  - Como máximo dos llamadas bloqueantes al backend por SMS, para responder a
- *    tiempo a Twilio; el consentimiento se guarda en segundo plano.
+ * Rules (CLAUDE.md, sections 4, 15 and 17):
+ *  - The phone number is not proof of identity: the candidate is always confirmed.
+ *  - A plot is never picked at random; without confirmation the report has no plot.
+ *  - Nothing is saved without consent. Three separate permissions (reports,
+ *    alerts, follow-up calls); only the missing ones are asked, and every
+ *    report is confirmed before it is saved.
+ *  - "ALERTS OFF" (and STOP) revoke alerts and follow-ups in the backend.
+ *  - "It's been recorded" is only said after a 201 from the backend.
+ *  - If the advisor fails, we say so and save the report without made-up guidance.
+ *  - At most two blocking backend calls per SMS, so Twilio gets its answer in
+ *    time; consent is saved in the background.
  */
 import { randomUUID } from "node:crypto";
 import type { BackendClient } from "../backend/client.ts";
@@ -24,7 +24,7 @@ import type { FollowupSmsFlow } from "./followup.ts";
 import {
   adviceText,
   answerFrom,
-  isBajaKeyword,
+  isAlertsOffKeyword,
   isGreetingOnly,
   isOptOutKeyword,
   needQuestion,
@@ -61,12 +61,12 @@ export class SmsConversation {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** Devuelve el texto a contestar, o null para no contestar. */
+  /** Returns the reply text, or null to send no reply. */
   async handle(msg: InboundSms): Promise<string | null> {
     const text = msg.text.trim();
 
-    if (isBajaKeyword(text)) return this.optOut(msg, true);
-    // STOP y similares: Twilio contesta y bloquea; nosotros revocamos para que el backend coincida.
+    if (isAlertsOffKeyword(text)) return this.optOut(msg, true);
+    // STOP and friends: Twilio answers and blocks; we revoke so the backend matches.
     if (isOptOutKeyword(text)) return this.optOut(msg, false);
 
     const stored = this.deps.store.get(msg.from);
@@ -100,14 +100,14 @@ export class SmsConversation {
     }
   }
 
-  /** Cierra conversaciones inactivas: guarda lo recibido como parcial o registra el seguimiento sin respuesta. */
+  /** Closes idle conversations: saves what was received as partial, or records the follow-up as unanswered. */
   async sweep(): Promise<void> {
     for (const session of [...this.deps.store.values()]) {
       if (isOpen(session) && this.isIdle(session)) await this.closeIdle(session);
     }
   }
 
-  // --- Baja ---
+  // --- Opt-out ---
 
   private async optOut(msg: InboundSms, reply: boolean): Promise<string | null> {
     const existing = this.deps.store.get(msg.from);
@@ -129,13 +129,13 @@ export class SmsConversation {
       },
       msg.message_sid,
     );
-    log("info", "sms_opt_out", { phone: maskPhone(msg.from), outcome: outcome.status, keyword: reply ? "baja" : "stop" });
+    log("info", "sms_opt_out", { phone: maskPhone(msg.from), outcome: outcome.status, keyword: reply ? "alerts_off" : "stop" });
     if (!reply) return null;
     if (outcome.status === "saved") return sms.optedOut;
     return outcome.status === "pending" ? sms.optOutPending : sms.optOutFailed;
   }
 
-  // --- Etapas ---
+  // --- Stages ---
 
   private async start(msg: InboundSms, text: string): Promise<string> {
     const session: SmsSession = {
@@ -191,7 +191,7 @@ export class SmsConversation {
     session.invalid_replies = 0;
 
     if (choice === "none") {
-      // No es ninguno de los registrados: se trata como número desconocido, sin parcela.
+      // None of the registered people: treat it as an unknown number, with no plot.
       session.stage = { kind: "consent", scope: "reports" };
       return sms.consent;
     }
@@ -219,8 +219,8 @@ export class SmsConversation {
   }
 
   /**
-   * El backend firma cada candidato por 15 minutos y solo para esta sesión y teléfono. Si caducó,
-   * se piden candidatos nuevos y se vuelve a preguntar; nunca se confirma a alguien sin su respuesta.
+   * The backend signs each candidate for 15 minutes, only for this session and phone. If it expired,
+   * we fetch fresh candidates and ask again; nobody is ever confirmed without their answer.
    */
   private async refreshCandidates(session: SmsSession): Promise<string> {
     const resolved = await this.deps.client.resolveContact({
@@ -250,7 +250,7 @@ export class SmsConversation {
 
   private async selectPlot(session: SmsSession, plotId: string): Promise<string> {
     const context = await this.deps.client.getPlotContext(plotId, session.session_id);
-    // Sin contexto la parcela sigue confirmada; cultivo y variedad quedan como desconocidos (null).
+    // Without context the plot is still confirmed; crop and variety stay unknown (null).
     session.plot = context.ok
       ? { plot_id: plotId, crop: context.data.crop, variety: context.data.variety }
       : { plot_id: plotId, crop: null, variety: null };
@@ -258,9 +258,9 @@ export class SmsConversation {
     return this.askConsent(session);
   }
 
-  // --- Consentimiento ---
+  // --- Consent ---
 
-  /** Siguiente permiso por preguntar. Avisos y seguimientos solo para un agricultor confirmado que nunca respondió. */
+  /** Next permission to ask. Alerts and follow-ups only for a confirmed farmer who never answered them. */
   private nextConsentScope(session: SmsSession): ConsentScope | null {
     if (session.consent.reports === null) return "reports";
     if (!session.farmer) return null;
@@ -275,7 +275,7 @@ export class SmsConversation {
     return session.stored_consent?.reports === true ? sms.confirmReport : sms.consent;
   }
 
-  /** Solo se llama cuando falta al menos el permiso de reportes, así que no hace llamadas al backend. */
+  /** Only called when at least the report permission is missing, so it makes no backend calls. */
   private askConsent(session: SmsSession): string {
     const scope = this.nextConsentScope(session) ?? "reports";
     session.stage = { kind: "consent", scope };
@@ -310,9 +310,9 @@ export class SmsConversation {
   }
 
   /**
-   * Guarda en segundo plano los permisos nuevos de esta conversación. Confirmar
-   * un reporte cuando ya había permiso no se reenvía; negarse a guardar un
-   * reporte concreto tampoco revoca un permiso que ya existía.
+   * Saves this conversation's new permissions in the background. Confirming a
+   * report when permission already existed isn't resent; declining to save one
+   * specific report doesn't revoke a permission that already existed either.
    */
   private recordConsent(session: SmsSession): void {
     if (!session.farmer) return;
@@ -335,10 +335,10 @@ export class SmsConversation {
     );
   }
 
-  // --- Evaluación ---
+  // --- Assessment ---
 
   private async assessAndMaybeFinish(session: SmsSession): Promise<string> {
-    // Sin parcela confirmada no hay evaluación: registro mínimo para revisión humana.
+    // No confirmed plot means no assessment: minimal record for human review.
     if (!session.plot) {
       const outcome = await this.finish(session, "partial");
       return closingText(outcome, sms.savedUnknown);
@@ -375,7 +375,7 @@ export class SmsConversation {
     const assessment = assessed.data;
     session.last_assessment_id = assessment.assessment_id;
     if (assessment.disposition === "ask_more") {
-      // Una pregunta por turno, la de mayor prioridad que aún no se hizo.
+      // One question per turn: the highest-priority one not asked yet.
       const need = [...assessment.information_needs]
         .sort((a, b) => a.priority - b.priority)
         .find((n) => !session.asked_need_codes.includes(n.need_code));
@@ -384,7 +384,7 @@ export class SmsConversation {
         session.stage = { kind: "answer", need };
         return needQuestion(need);
       }
-      // Sin preguntas nuevas o límite alcanzado: se cierra con lo disponible, para revisión.
+      // No new questions or limit reached: close with what we have, for review.
       return `${sms.refer} ${closingText(await this.finish(session, "partial"))}`;
     }
 
@@ -394,7 +394,7 @@ export class SmsConversation {
     return `${sms.refer} ${closingText(await this.finish(session, "partial"))}`;
   }
 
-  // --- Cierre ---
+  // --- Closing ---
 
   private async finish(session: SmsSession, completeness: "partial" | "sufficient"): Promise<WriteOutcome<unknown>> {
     session.stage = { kind: "closed" };
@@ -414,7 +414,7 @@ export class SmsConversation {
       assessment_id: session.last_assessment_id,
       is_demo: this.deps.isDemo,
     };
-    // Una conversación produce un reporte; la clave sobrevive a reinicios porque sale del MessageSid.
+    // One conversation produces one report; the key survives restarts because it comes from the MessageSid.
     const outcome = await this.deps.writer.submitReport(body, `report-sms-${session.first_message_sid}`);
     log("info", "sms_report_submitted", { correlation_id: session.session_id, outcome: outcome.status, completeness });
     return outcome;
@@ -439,7 +439,7 @@ export class SmsConversation {
     else await this.closeHelp(session);
   }
 
-  /** Si había observación con permiso de guardarla, se guarda como parcial. */
+  /** If there was an observation with permission to save it, it is saved as partial. */
   private async closeHelp(session: SmsSession): Promise<void> {
     this.deps.store.delete(session.phone_e164);
     const hasObservation = session.consent.reports === true && session.statements.length > 0 && !session.report_submitted;

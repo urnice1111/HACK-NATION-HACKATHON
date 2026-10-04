@@ -1,9 +1,9 @@
 /**
- * Cuerpos de solicitud/respuesta de los contratos HTTP v2 (sección 10).
+ * Request/response bodies of the v2 HTTP contracts (section 10).
  *
- * Lo marcado como ACORDADO no está en el documento: lo propuso comunicaciones y el
- * backend ya lo implementa igual (`contracts/models.py`); `test/contracts-compat.test.ts`
- * lo comprueba. Lo demás reproduce los ejemplos 10.1, 10.4 y 10.5.
+ * Anything marked AGREED isn't in the spec: communications proposed it and the
+ * backend already implements it the same way (`contracts/models.py`);
+ * `test/contracts-compat.test.ts` checks it. The rest mirrors examples 10.1, 10.4 and 10.5.
  */
 import { z } from "zod";
 import {
@@ -32,7 +32,7 @@ const VoiceOrSms = z.enum(["voice", "sms"]);
 
 // --- POST /v1/assessments (10.1) ---
 
-/** Respuesta del agricultor a una necesidad. `unknown: true` ("no sé") exige `value: null`; nunca cero. */
+/** The farmer's answer to a need. `unknown: true` ("I don't know") requires `value: null`; never zero. */
 export const ObservationAnswer = z
   .strictObject({
     need_code: z.string().min(1),
@@ -41,7 +41,7 @@ export const ObservationAnswer = z
     raw_text: z.string(),
     unknown: z.boolean(),
   })
-  .refine((a) => !a.unknown || a.value === null, { path: ["value"], message: "debe ser null si unknown es true" });
+  .refine((a) => !a.unknown || a.value === null, { path: ["value"], message: "must be null if unknown is true" });
 
 export const AssessmentRequest = z.strictObject({
   schema_version: SchemaVersion,
@@ -56,7 +56,7 @@ export const AssessmentRequest = z.strictObject({
     answers: z.array(ObservationAnswer),
     completeness: Completeness,
   }),
-  /** Necesidades ya preguntadas en la sesión; el asesor no debe repetirlas. */
+  /** Needs already asked in the session; the advisor must not repeat them. */
   asked_need_codes: z.array(z.string().min(1)),
   plot_context: z.strictObject({
     crop: z.string().nullable(),
@@ -65,7 +65,7 @@ export const AssessmentRequest = z.strictObject({
   is_demo: z.boolean(),
 });
 
-/** Dato que solo el agricultor puede aportar. El texto de la pregunta lo formula comunicaciones. */
+/** Information only the farmer can provide. Communications phrases the actual question. */
 export const InformationNeed = z
   .strictObject({
     need_code: z.string().min(1),
@@ -74,13 +74,13 @@ export const InformationNeed = z
     farmer_hint: z.string().min(1),
     answer_type: AnswerType,
     options: z.array(z.string().min(1)).min(1).nullable(),
-    /** 1 = preguntar primero. */
+    /** 1 = ask first. */
     priority: z.number().int().min(1),
     can_be_unknown: z.boolean(),
   })
-  .refine((n) => n.answer_type !== "choice" || n.options !== null, { path: ["options"], message: "obligatorio si answer_type es choice" });
+  .refine((n) => n.answer_type !== "choice" || n.options !== null, { path: ["options"], message: "required if answer_type is choice" });
 
-/** Consulta que el asesor hizo a los datos en vez de preguntar. */
+/** A data query the advisor made instead of asking. */
 export const DataUsed = z.strictObject({
   query_id: z.string().min(1),
   summary: z.string().min(1),
@@ -88,7 +88,7 @@ export const DataUsed = z.strictObject({
   dataset_ids: z.array(z.string().min(1)),
 });
 
-/** Experiencia de otro agricultor; se comunica como testimonio, no como recomendación validada. */
+/** Another farmer's experience; conveyed as testimony, not as a validated recommendation. */
 export const ResolvedCaseMention = z.strictObject({
   resolution_id: OpaqueId,
   summary_for_speech: z.string().min(1),
@@ -131,7 +131,7 @@ export const AssessmentResponse = z.strictObject({
 export const ReportRequest = z.strictObject({
   schema_version: SchemaVersion,
   session_id: OpaqueId,
-  /** ACORDADO: null para el "registro mínimo" de un número desconocido; nunca una parcela al azar. */
+  /** AGREED: null for the "minimal record" of an unknown number; never a random plot. */
   plot_id: OpaqueId.nullable(),
   case_id: OpaqueId.nullable(),
   channel: Channel,
@@ -141,7 +141,7 @@ export const ReportRequest = z.strictObject({
   measurements: z.array(Measurement),
   user_statement: z.string(),
   completeness: Completeness,
-  /** Opcional si la evaluación falló. */
+  /** Optional if the assessment failed. */
   assessment_id: OpaqueId.nullable().optional(),
   is_demo: z.boolean(),
 });
@@ -156,7 +156,7 @@ export const ReportCreated = z.strictObject({
 
 // --- GET /v1/reports/{report_id} ---
 
-/** ACORDADO: el documento solo dice "caso, evaluación y estado de procesamiento". */
+/** AGREED: the spec only says "case, assessment and processing status". */
 export const ReportDetail = z.strictObject({
   report_id: OpaqueId,
   case_id: OpaqueId.nullable(),
@@ -179,8 +179,8 @@ export const ReportDetail = z.strictObject({
 // --- POST /v1/contact-resolution ---
 
 /**
- * ACORDADO. Los tres permisos de la sección 17, por separado. `null` = nunca
- * se preguntó (hay que pedirlo); `false` = lo negó o lo revocó.
+ * AGREED. The three permissions of section 17, separately. `null` = never
+ * asked (must be requested); `false` = declined or revoked.
  */
 export const ContactConsent = z.strictObject({
   reports: z.boolean().nullable(),
@@ -190,10 +190,10 @@ export const ContactConsent = z.strictObject({
 });
 
 /**
- * ACORDADO. Dos pasos en la misma ruta:
- *  1. Sin `confirm_candidate_token`: devuelve candidatos con token opaco y etiqueta mínima.
- *  2. Con el token que el usuario confirmó: habilita los datos de ese agricultor para la sesión.
- * El caller ID por sí solo nunca es prueba de identidad.
+ * AGREED. Two steps on the same route:
+ *  1. Without `confirm_candidate_token`: returns candidates with an opaque token and a minimal label.
+ *  2. With the token the user confirmed: unlocks that farmer's data for the session.
+ * Caller ID alone is never proof of identity.
  */
 export const ContactResolutionRequest = z.strictObject({
   schema_version: SchemaVersion,
@@ -206,7 +206,7 @@ export const ContactResolutionRequest = z.strictObject({
 
 export const ContactCandidate = z.strictObject({
   candidate_token: z.string().min(1),
-  /** Etiqueta mínima para preguntar "¿hablo con…?"; nada más del registro. */
+  /** Minimal label to ask "am I speaking with…?"; nothing else from the record. */
   label: z.string().min(1),
 });
 
@@ -232,9 +232,9 @@ export const ContactResolutionResponse = z.strictObject({
 // --- GET /v1/plots/{plot_id}/context ---
 
 /**
- * ACORDADO: forma del resumen ambiental (`env.plot_summary`, Integrante 4)
- * dentro del contexto. Cada característica lleva unidad explícita (sección 8);
- * `value: null` = sin dato o fuera de cobertura.
+ * AGREED: shape of the environmental summary (`env.plot_summary`, Member 4)
+ * inside the context. Every feature carries an explicit unit (section 8);
+ * `value: null` = no data or out of coverage.
  */
 export const EnvironmentSummary = z.strictObject({
   computed_at: IsoUtc,
@@ -249,7 +249,7 @@ export const EnvironmentSummary = z.strictObject({
   dataset_ids: z.array(z.string().min(1)),
 });
 
-/** ACORDADO: contexto mínimo para el asesor y la conversación; sin coordenadas ni datos de contacto. */
+/** AGREED: minimal context for the advisor and the conversation; no coordinates or contact details. */
 export const PlotContext = z.strictObject({
   schema_version: SchemaVersion,
   plot_id: OpaqueId,
@@ -258,7 +258,7 @@ export const PlotContext = z.strictObject({
   variety: z.string().nullable(),
   altitude_m: z.number().nullable(),
   data_freshness: DataFreshness,
-  /** null si el Integrante 4 aún no tiene resumen para la parcela. */
+  /** null if Member 4 has no summary for the plot yet. */
   environment_summary: EnvironmentSummary.nullable(),
   active_cases: z.array(
     z.strictObject({
@@ -283,9 +283,9 @@ export const PlotContext = z.strictObject({
 // --- GET /v1/followups?status=… ---
 
 /**
- * ACORDADO: el documento dice "seguimientos con resumen del caso". Comunicaciones
- * necesita además el contacto para marcar y comprobar consentimiento/horario;
- * `contact` solo debería devolverse al token de servicio `comms`.
+ * AGREED: the spec says "follow-ups with a case summary". Communications also
+ * needs the contact to dial and to check consent/hours; `contact` should only
+ * be returned to the `comms` service token.
  */
 export const FollowupListItem = z.strictObject({
   followup_id: OpaqueId,
@@ -297,7 +297,7 @@ export const FollowupListItem = z.strictObject({
   attempt_count: z.number().int().min(0),
   questionnaire_version: z.string().min(1),
   call_reference: z.string().nullable(),
-  /** Variables dinámicas del agente de seguimiento (sección 4). */
+  /** Dynamic variables for the follow-up agent (section 4). */
   case_summary: z.strictObject({
     farmer_name: z.string().min(1),
     threat_code: z.string().min(1),
@@ -327,10 +327,10 @@ export const FollowupList = z.strictObject({
 // --- POST /v1/followups/{id}/attempts ---
 
 /**
- * ACORDADO: la v2 solo define `responses`. Comunicaciones necesita registrar
- * cada intento (`contacting`, `no_response`, `failed`). `contacting` liga la
- * sesión (conversation_id de ElevenLabs o sesión SMS) a la parcela del caso,
- * porque en una llamada saliente no hay `contact-resolution`.
+ * AGREED: v2 only defines `responses`. Communications needs to record every
+ * attempt (`contacting`, `no_response`, `failed`). `contacting` binds the
+ * session (ElevenLabs conversation_id or SMS session) to the case's plot,
+ * because an outbound call has no `contact-resolution`.
  */
 export const FollowupAttemptRequest = z.strictObject({
   schema_version: SchemaVersion,
@@ -368,7 +368,7 @@ export const FollowupResponseCreated = z.strictObject({
   report_id: OpaqueId,
   case_id: OpaqueId,
   case_status: CaseStatus,
-  /** null salvo con `status_reported: resolved`. */
+  /** null unless `status_reported: resolved`. */
   resolution_id: OpaqueId.nullable(),
   next_followup_at: IsoUtc.nullable(),
 });
@@ -376,8 +376,8 @@ export const FollowupResponseCreated = z.strictObject({
 // --- POST /v1/consents ---
 
 /**
- * ACORDADO: la v2 exige guardar tres permisos con `consent_at`, pero no define
- * dónde. Cada permiso `null` = no se preguntó en esta sesión (se conserva el anterior).
+ * AGREED: v2 requires storing three permissions with `consent_at`, but doesn't say
+ * where. Each permission `null` = not asked in this session (the previous one is kept).
  */
 export const ConsentRequest = z.strictObject({
   schema_version: SchemaVersion,
@@ -401,7 +401,7 @@ export const ConsentRecorded = z.strictObject({
 
 const RevocableScope = z.enum(["notifications", "followup_calls"]);
 
-/** ACORDADO: "BAJA" por SMS revoca avisos y seguimientos de todos los contactos con ese teléfono. */
+/** AGREED: "ALERTS OFF" by SMS revokes alerts and follow-ups for every contact with that phone. */
 export const ConsentRevocationRequest = z.strictObject({
   schema_version: SchemaVersion,
   phone_e164: PhoneE164,

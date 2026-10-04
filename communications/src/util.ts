@@ -1,6 +1,6 @@
-/** Utilidades en memoria compartidas por el servidor, el despachador y las herramientas de voz. */
+/** In-memory utilities shared by the server, the dispatcher and the voice tools. */
 
-/** Serializa el trabajo por clave (teléfono, seguimiento): dos tareas con la misma clave no se pisan. */
+/** Serializes work per key (phone, follow-up): two tasks with the same key never overlap. */
 export class KeyedMutex {
   private readonly tails = new Map<string, Promise<unknown>>();
 
@@ -16,7 +16,7 @@ export class KeyedMutex {
   }
 }
 
-/** Map que olvida la entrada más antigua al pasar de `capacity`; para deduplicar sin crecer sin límite. */
+/** Map that forgets its oldest entry past `capacity`; for deduplicating without unbounded growth. */
 export class BoundedMap<K, V> extends Map<K, V> {
   constructor(private readonly capacity = 5000) {
     super();

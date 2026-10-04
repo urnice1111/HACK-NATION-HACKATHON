@@ -3,9 +3,9 @@ import { PhoneE164 } from "./contracts/index.ts";
 
 const Url = z.url({ protocol: /^https?$/ });
 const Flag = (fallback: "true" | "false") => z.enum(["true", "false"]).default(fallback).transform((v) => v === "true");
-/** Vacío o ausente → null. */
+/** Empty or missing → null. */
 const Optional = z.string().optional().transform((v) => v || null);
-const Secret = z.string().min(16, "mínimo 16 caracteres").optional().or(z.literal("")).transform((v) => v || null);
+const Secret = z.string().min(16, "at least 16 characters").optional().or(z.literal("")).transform((v) => v || null);
 const Ms = (fallback: number) => z.coerce.number().int().positive().default(fallback);
 /** "a, b,c" → ["a", "b", "c"]. */
 const List = (fallback = "") => z.string().default(fallback).transform((v) => v.split(",").map((n) => n.trim()).filter(Boolean));
@@ -22,91 +22,91 @@ const PRODUCTION_REQUIRED = [
 const Env = z
   .object({
     COMMS_PORT: z.coerce.number().int().positive().default(8080),
-    /** Dominio público exacto (sin ruta ni "/" final). Twilio firma con él. */
-    PUBLIC_BASE_URL: Url.refine((u) => new URL(u).pathname === "/" && !u.endsWith("/"), "solo el origen, sin ruta ni / final"),
+    /** Exact public domain (no path or trailing "/"). Twilio signs with it. */
+    PUBLIC_BASE_URL: Url.refine((u) => new URL(u).pathname === "/" && !u.endsWith("/"), "origin only, no path or trailing /"),
     TWILIO_AUTH_TOKEN: z.string().min(1),
-    /** Sin él, los SMS salientes usan el stub (no se envía nada). */
+    /** Without it, outbound SMS use the stub (nothing is sent). */
     TWILIO_ACCOUNT_SID: Optional,
     TWILIO_PHONE_NUMBER: PhoneE164,
     BACKEND_BASE_URL: Url,
-    /** El backend real aún no exige token (el mock sí); sin él no se envía `Authorization`. */
+    /** The real backend doesn't require a token yet (the mock does); without it no `Authorization` is sent. */
     BACKEND_SERVICE_TOKEN: Optional,
-    /** El asesor del Integrante 2 es otro servicio (`advisor/`); vacío = BACKEND_BASE_URL (el mock sirve ambos). */
+    /** Member 2's advisor is a separate service (`advisor/`); empty = BACKEND_BASE_URL (the mock serves both). */
     ADVISOR_BASE_URL: Url.optional().or(z.literal("")).transform((v) => v || null),
-    /** Tope de las herramientas de voz, que esperan una evaluación (≤ 5 s) y el guardado. */
+    /** Cap for the voice tools, which wait for an assessment (≤ 5 s) and the save. */
     BACKEND_TIMEOUT_MS: Ms(8000),
-    /** Todo lo que produce este servicio va marcado así; demo y producción no se mezclan. */
+    /** Everything this service produces is tagged this way; demo and production never mix. */
     IS_DEMO: Flag("true"),
-    /** Solo demo: contactar fuera de 08:00–19:00 para probar de noche. Consentimiento y lista blanca se siguen exigiendo. */
+    /** Demo only: contact outside 08:00–19:00 to test at night. Consent and the allowlist are still enforced. */
     DEMO_IGNORE_ALLOWED_HOURS: Flag("false"),
-    DEFAULT_LANGUAGE: z.string().default("es"),
-    /** Tope por llamada al backend dentro del webhook (Twilio corta a los 15 s; hacemos ≤ 2 llamadas). */
+    DEFAULT_LANGUAGE: z.string().default("en"),
+    /** Cap per backend call inside the webhook (Twilio gives up after 15 s; we make ≤ 2 calls). */
     SMS_STEP_TIMEOUT_MS: Ms(4000),
-    /** Inactividad tras la que una llamada de ayuda se da por cortada: lo descrito con permiso se guarda como parcial. */
+    /** Inactivity after which a help call is considered dropped: what was described with permission is saved as partial. */
     VOICE_SESSION_IDLE_MS: Ms(15 * 60 * 1000),
-    /** Inactividad tras la que una conversación SMS se cierra (y se guarda como parcial si procede). */
+    /** Inactivity after which an SMS conversation closes (and is saved as partial if applicable). */
     SMS_SESSION_IDLE_MS: Ms(30 * 60 * 1000),
-    /** Cuánto se espera la respuesta a un seguimiento por SMS antes de registrar `no_response`. */
+    /** How long to wait for an SMS follow-up reply before recording `no_response`. */
     FOLLOWUP_SMS_REPLY_WINDOW_MS: Ms(24 * 60 * 60 * 1000),
-    /** Lista blanca de demo (E.164 separados por comas): en demo solo se contacta a estos números. Vacía = a nadie. */
+    /** Demo allowlist (comma-separated E.164): in demo only these numbers are contacted. Empty = nobody. */
     DEMO_ALLOWED_NUMBERS: List().pipe(z.array(PhoneE164)).transform((list) => new Set(list)),
-    // --- Agentes de ElevenLabs: se crean en el panel y aquí solo se referencian (ver agents/README.md) ---
-    /** Sin la clave, el ID del agente de seguimiento y el del número, las llamadas salientes usan el stub. */
+    // --- ElevenLabs agents: created in the dashboard and only referenced here (see agents/README.md) ---
+    /** Without the key, the follow-up agent ID and the number ID, outbound calls use the stub. */
     ELEVENLABS_API_KEY: Optional,
-    /** Agente de ayuda (llamadas entrantes). Solo se usa para comprobar su configuración al arrancar. */
+    /** Help agent (inbound calls). Only used to check its configuration at startup. */
     ELEVENLABS_HELP_AGENT_ID: Optional,
     ELEVENLABS_FOLLOWUP_AGENT_ID: Optional,
-    /** Un solo número para ambos agentes: su ID en ElevenLabs (Phone Numbers), no el E.164. Con dos números, usa los de abajo. */
+    /** A single number for both agents: its ElevenLabs ID (Phone Numbers), not the E.164. With two numbers, use the ones below. */
     ELEVENLABS_AGENT_PHONE_NUMBER_ID: Optional,
-    /** Número que contesta las llamadas entrantes (agente de ayuda): E.164 y su ID en ElevenLabs. */
+    /** Number that answers inbound calls (help agent): E.164 and its ElevenLabs ID. */
     HELP_AGENT_TELEPHONE: PhoneE164.optional().or(z.literal("")).transform((v) => v || null),
     HELP_AGENT_TELEPHONE_ID: Optional,
-    /** Número desde el que llama el agente de seguimiento: E.164 y su ID en ElevenLabs. */
+    /** Number the follow-up agent calls from: E.164 and its ElevenLabs ID. */
     FOLLOW_UP_AGENT_PHONE: PhoneE164.optional().or(z.literal("")).transform((v) => v || null),
     FOLLOW_UP_AGENT_PHONE_ID: Optional,
-    /** Secreto que ElevenLabs envía como `Authorization: Bearer …` a /v1/tools/*. Sin él, esas rutas responden 503. */
+    /** Secret ElevenLabs sends as `Authorization: Bearer …` to /v1/tools/*. Without it, those routes answer 503. */
     ELEVENLABS_TOOL_SECRET: Secret,
-    /** Token con el que el worker del backend entrega `followup.due` (PROPUESTO). Sin él, esa ruta responde 503. */
+    /** Token the backend worker uses to deliver `followup.due` (PROPOSED). Without it, that route answers 503. */
     COMMS_SERVICE_TOKEN: Secret,
-    /** Sondeo de seguimientos vencidos como respaldo del evento; 0 lo desactiva. */
+    /** Polling for due follow-ups as a fallback for the event; 0 turns it off. */
     FOLLOWUP_POLL_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
-    /** Intentos de llamada antes del SMS de respaldo (sección 17). */
+    /** Call attempts before the fallback SMS (section 17). */
     FOLLOWUP_CALL_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(3),
-    /** Si no llega `submit_followup` en este plazo tras colocar la llamada, se registra `no_response`. */
+    /** If `submit_followup` doesn't arrive within this time after placing the call, `no_response` is recorded. */
     FOLLOWUP_CALL_RESULT_TIMEOUT_MS: Ms(10 * 60 * 1000),
-    /** Espera tras un fallo transitorio de ElevenLabs al colocar la llamada. */
+    /** Wait after a transient ElevenLabs failure placing the call. */
     FOLLOWUP_PLACEMENT_BACKOFF_MS: Ms(2 * 60 * 1000),
-    /** Reintentos en segundo plano de una escritura no confirmada (máximo 3 intentos en total). */
+    /** Background retries of an unconfirmed write (at most 3 attempts in total). */
     REPORT_RETRY_DELAYS_MS: List("5000,30000").transform((list) => list.map(Number).filter((n) => Number.isFinite(n) && n >= 0).slice(0, 2)),
   })
   .refine((env) => env.IS_DEMO || !env.DEMO_IGNORE_ALLOWED_HOURS, {
     path: ["DEMO_IGNORE_ALLOWED_HOURS"],
-    message: "solo se permite con IS_DEMO=true",
+    message: "only allowed with IS_DEMO=true",
   })
   .superRefine((env, ctx) => {
-    // Producción: nada de stubs ni rutas sin credenciales; todo lo que llama o escribe debe estar configurado.
+    // Production: no stubs or routes without credentials; everything that calls or writes must be configured.
     if (env.IS_DEMO) return;
     for (const key of PRODUCTION_REQUIRED) {
-      if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "obligatorio con IS_DEMO=false" });
+      if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "required with IS_DEMO=false" });
     }
     for (const key of ["HELP_AGENT_TELEPHONE_ID", "FOLLOW_UP_AGENT_PHONE_ID"] as const) {
       if (!env[key] && !env.ELEVENLABS_AGENT_PHONE_NUMBER_ID) {
-        ctx.addIssue({ code: "custom", path: [key], message: "obligatorio con IS_DEMO=false (o ELEVENLABS_AGENT_PHONE_NUMBER_ID si es un solo número)" });
+        ctx.addIssue({ code: "custom", path: [key], message: "required with IS_DEMO=false (or ELEVENLABS_AGENT_PHONE_NUMBER_ID for a single number)" });
       }
     }
     if (!env.PUBLIC_BASE_URL.startsWith("https://")) {
-      ctx.addIssue({ code: "custom", path: ["PUBLIC_BASE_URL"], message: "debe ser https con IS_DEMO=false" });
+      ctx.addIssue({ code: "custom", path: ["PUBLIC_BASE_URL"], message: "must be https with IS_DEMO=false" });
     }
   });
 
 export type Config = z.infer<typeof Env>;
 
-/** Valida el entorno al arrancar. El mensaje de error nombra variables, nunca valores. */
+/** Validates the environment at startup. The error message names variables, never values. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
-    throw new Error(`Configuración inválida:\n${problems}`);
+    throw new Error(`Invalid configuration:\n${problems}`);
   }
   return parsed.data;
 }

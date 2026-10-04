@@ -13,8 +13,8 @@ function callerWith(response: () => Response | Promise<Response>) {
   return { caller, requests };
 }
 
-describe("llamada saliente de ElevenLabs", () => {
-  it("manda agente, número, destino y variables dinámicas, sin grabación", async () => {
+describe("ElevenLabs outbound call", () => {
+  it("sends agent, number, destination and dynamic variables, without recording", async () => {
     const { caller, requests } = callerWith(
       () => new Response(JSON.stringify({ success: true, message: "ok", conversation_id: "conv_1", callSid: "CA1" }), { status: 200 }),
     );
@@ -32,7 +32,7 @@ describe("llamada saliente de ElevenLabs", () => {
     assert.equal(body.call_recording_enabled, false);
   });
 
-  it("error 4xx: rechazada sin reintento; 5xx: reintentable; red caída: ambigua", async () => {
+  it("4xx error: rejected without retry; 5xx: retryable; network down: ambiguous", async () => {
     const bad = await callerWith(() => new Response(JSON.stringify({ detail: "invalid" }), { status: 422 })).caller.placeCall({ to: "+1", dynamicVariables: {} });
     assert.deepEqual(bad, { ok: false, kind: "rejected", code: "ELEVENLABS_422", retryable: false });
 

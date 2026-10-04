@@ -46,7 +46,7 @@ function resolution(sessionId: string, phone: string, token: string | null = nul
   };
 }
 
-/** Resuelve y confirma el único/primer candidato; devuelve el plot_id confirmado. */
+/** Resolves and confirms the only/first candidate; returns the confirmed plot_id. */
 async function confirmFirst(sessionId: string, phone: string): Promise<string> {
   const found = await client.resolveContact(resolution(sessionId, phone));
   assert.ok(found.ok);
@@ -64,9 +64,9 @@ function report(sessionId: string, plotId: string | null, overrides: Partial<Rep
     channel: "voice",
     provider_reference: "conv_demo_test",
     observed_at: null,
-    symptoms: ["manchas en hojas"],
+    symptoms: ["spots on leaves"],
     measurements: [],
-    user_statement: "Desde ayer veo manchas en varias plantas",
+    user_statement: "Since yesterday I see spots on several plants",
     completeness: "partial",
     assessment_id: null,
     is_demo: true,
@@ -83,8 +83,8 @@ async function rawPost(path: string, body: string, headers: Record<string, strin
   return { status: res.status, headers: res.headers, json: (await res.json()) as unknown };
 }
 
-describe("convenciones de la sección 8", () => {
-  it("401 con error uniforme y request_id propagado", async () => {
+describe("section 8 conventions", () => {
+  it("401 with uniform error and propagated request_id", async () => {
     const res = await fetch(`${baseUrl}/v1/reports/x`, { headers: { "X-Request-Id": "req_from_caller" } });
     assert.equal(res.status, 401);
     const body = ErrorBody.parse(await res.json());
@@ -93,19 +93,19 @@ describe("convenciones de la sección 8", () => {
     assert.equal(res.headers.get("x-request-id"), "req_from_caller");
   });
 
-  it("400 ante JSON inválido", async () => {
-    const res = await rawPost("/v1/assessments", "{no es json");
+  it("400 on invalid JSON", async () => {
+    const res = await rawPost("/v1/assessments", "{not json");
     assert.equal(res.status, 400);
     assert.equal(ErrorBody.parse(res.json).error.code, "INVALID_JSON");
   });
 
-  it("422 con details en forma measurements[0].unit y campos desconocidos", async () => {
+  it("422 with details shaped like measurements[0].unit and unknown fields", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const body = {
       ...report(session, plotId),
       measurements: [{ name: "ph", value: 6.1, sample_type: "suelo", measured_at: null, method: null, source: "farmer_reported" }],
-      plotId: "camelCase no está permitido",
+      plotId: "camelCase is not allowed",
     };
     const res = await rawPost("/v1/reports", JSON.stringify(body), { "Idempotency-Key": `k-${session}` });
     assert.equal(res.status, 422);
@@ -114,19 +114,19 @@ describe("convenciones de la sección 8", () => {
     assert.ok(details.some((d) => d.field === "plotId" && d.reason === "unrecognized"));
   });
 
-  it("un teléfono inválido no aparece en el error público", async () => {
+  it("an invalid phone never appears in the public error", async () => {
     const res = await rawPost("/v1/contact-resolution", JSON.stringify(resolution(newSession(), "55 1234 5678")));
     assert.equal(res.status, 422);
     assert.doesNotMatch(JSON.stringify(res.json), /1234/);
   });
 
-  it("rechaza is_demo=false: demo y producción no se mezclan", async () => {
+  it("rejects is_demo=false: demo and production never mix", async () => {
     const res = await rawPost("/v1/contact-resolution", JSON.stringify({ ...resolution(newSession(), KNOWN_PHONE), is_demo: false }));
     assert.equal(res.status, 422);
     assert.equal(ErrorBody.parse(res.json).error.code, "DEMO_MODE_MISMATCH");
   });
 
-  it("observed_at null se conserva como null (desconocido)", async () => {
+  it("observed_at null stays null (unknown)", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const created = await client.submitReport(report(session, plotId), reportIdempotencyKey(session, 1));
@@ -139,8 +139,8 @@ describe("convenciones de la sección 8", () => {
   });
 });
 
-describe("resolución de contacto (sección 15)", () => {
-  it("número conocido: pide confirmación y no expone datos antes", async () => {
+describe("contact resolution (section 15)", () => {
+  it("known number: asks for confirmation and exposes no data before", async () => {
     const session = newSession();
     const found = await client.resolveContact(resolution(session, KNOWN_PHONE));
     assert.ok(found.ok);
@@ -159,7 +159,7 @@ describe("resolución de contacto (sección 15)", () => {
     assert.equal(context.data.crop, "coffee");
   });
 
-  it("teléfono compartido: dos candidatos y confirmar uno no expone al otro", async () => {
+  it("shared phone: two candidates and confirming one doesn't expose the other", async () => {
     const session = newSession();
     const found = await client.resolveContact(resolution(session, SHARED_PHONE));
     assert.ok(found.ok);
@@ -177,14 +177,14 @@ describe("resolución de contacto (sección 15)", () => {
     assert.equal(other.code, "PLOT_NOT_CONFIRMED");
   });
 
-  it("número desconocido: sin candidatos ni parcela", async () => {
+  it("unknown number: no candidates or plot", async () => {
     const found = await client.resolveContact(resolution(newSession(), UNKNOWN_PHONE));
     assert.ok(found.ok);
     assert.equal(found.data.resolution_status, "no_match");
     assert.equal(found.data.candidates.length, 0);
   });
 
-  it("un candidate_token no sirve en otra sesión", async () => {
+  it("a candidate_token doesn't work in another session", async () => {
     const found = await client.resolveContact(resolution(newSession(), KNOWN_PHONE));
     assert.ok(found.ok);
     const stolen = await client.resolveContact(resolution(newSession(), KNOWN_PHONE, found.data.candidates[0]!.candidate_token));
@@ -192,13 +192,13 @@ describe("resolución de contacto (sección 15)", () => {
     assert.equal(stolen.status, 403);
   });
 
-  it("reporte de parcela no confirmada por la sesión: 403", async () => {
+  it("report for a plot the session didn't confirm: 403", async () => {
     const res = await client.submitReport(report(newSession(), "plot_demo_01"), "k-unconfirmed");
     assert.ok(!res.ok);
     assert.equal(res.code, "PLOT_NOT_CONFIRMED");
   });
 
-  it("número desconocido puede dejar registro mínimo sin parcela ni caso", async () => {
+  it("unknown number can leave a minimal record without plot or case", async () => {
     const session = newSession();
     const res = await client.submitReport(report(session, null), reportIdempotencyKey(session, 1));
     assert.ok(res.ok);
@@ -207,7 +207,7 @@ describe("resolución de contacto (sección 15)", () => {
 });
 
 describe("idempotencia (webhook duplicado)", () => {
-  it("misma clave y cuerpo → mismo reporte; otro cuerpo → 409", async () => {
+  it("same key and body → same report; different body → 409", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const key = reportIdempotencyKey(session, 3);
@@ -221,7 +221,7 @@ describe("idempotencia (webhook duplicado)", () => {
     assert.equal(replay.replayed, true);
     assert.equal(state.reports.size, before + 1);
 
-    const conflict = await client.submitReport(report(session, plotId, { user_statement: "otra cosa" }), key);
+    const conflict = await client.submitReport(report(session, plotId, { user_statement: "something else" }), key);
     assert.ok(!conflict.ok);
     assert.equal(conflict.status, 409);
   });
@@ -233,7 +233,7 @@ describe("idempotencia (webhook duplicado)", () => {
     assert.equal(res.status, 422);
   });
 
-  it("tres reportes de la misma parcela se agrupan en un caso", async () => {
+  it("three reports for the same plot are grouped into one case", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, "+12025550107");
     const ids = new Set<string | null>();
@@ -245,7 +245,7 @@ describe("idempotencia (webhook duplicado)", () => {
     assert.equal(ids.size, 1);
   });
 
-  it("timeout ambiguo: el reintento con la misma clave devuelve el original", async () => {
+  it("ambiguous timeout: the retry with the same key returns the original", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const key = reportIdempotencyKey(session, 1);
@@ -263,15 +263,15 @@ describe("idempotencia (webhook duplicado)", () => {
   });
 });
 
-describe("asesor mock (v2: information_needs)", () => {
+describe("mock advisor (v2: information_needs)", () => {
   type Answer = { need_code: string; value: string | number | boolean | null; unit: string | null; raw_text: string; unknown: boolean };
   const known = (need_code: string, value: string): Answer => ({ need_code, value, unit: null, raw_text: value, unknown: false });
-  const dontKnow = (need_code: string): Answer => ({ need_code, value: null, unit: null, raw_text: "no sé", unknown: true });
+  const dontKnow = (need_code: string): Answer => ({ need_code, value: null, unit: null, raw_text: "I don't know", unknown: true });
 
   async function assessFor(
     phone: string,
     answers: Answer[],
-    { crop = "coffee", asked = [], statement = "Desde ayer veo manchas" }: { crop?: string | null; asked?: string[]; statement?: string } = {},
+    { crop = "coffee", asked = [], statement = "Since yesterday I see spots" }: { crop?: string | null; asked?: string[]; statement?: string } = {},
   ) {
     const session = newSession();
     const plotId = await confirmFirst(session, phone);
@@ -279,10 +279,10 @@ describe("asesor mock (v2: information_needs)", () => {
       schema_version: SCHEMA_VERSION,
       session_id: session,
       plot_id: plotId,
-      language: "es",
+      language: "en",
       observation: {
         observed_at: null,
-        symptoms: ["manchas en hojas"],
+        symptoms: ["spots on leaves"],
         user_statement: statement,
         measurements: [],
         answers,
@@ -294,7 +294,7 @@ describe("asesor mock (v2: information_needs)", () => {
     });
   }
 
-  it("devuelve dos necesidades ordenadas, sin texto de pregunta, y declara los datos consultados", async () => {
+  it("returns two ordered needs, without question text, and declares the data queried", async () => {
     const res = await assessFor(KNOWN_PHONE, []);
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "ask_more");
@@ -307,31 +307,31 @@ describe("asesor mock (v2: information_needs)", () => {
     assert.equal(res.data.data_used[0]?.data_freshness, "fresh");
   });
 
-  it("no repite necesidades ya preguntadas", async () => {
-    const res = await assessFor(KNOWN_PHONE, [known("local_weather_perception", "llovió mucho")], { asked: ["leaf_underside"] });
+  it("doesn't repeat needs already asked", async () => {
+    const res = await assessFor(KNOWN_PHONE, [known("local_weather_perception", "it rained a lot")], { asked: ["leaf_underside"] });
     assert.ok(res.ok);
     const codes = res.data.information_needs.map((n) => n.need_code);
     assert.ok(!codes.includes("local_weather_perception") && !codes.includes("leaf_underside"));
     assert.equal(codes[0], "spot_appearance");
   });
 
-  it("\"no sé\" no cuenta como respuesta: sigue preguntando", async () => {
+  it("\"I don't know\" doesn't count as an answer: keeps asking", async () => {
     const res = await assessFor(KNOWN_PHONE, [dontKnow("leaf_underside")], { asked: ["local_weather_perception"] });
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "ask_more");
     assert.equal(res.data.information_needs[0]?.need_code, "spot_appearance");
   });
 
-  it("unknown=true con un valor distinto de null se rechaza (nunca cero)", async () => {
+  it("unknown=true with a non-null value is rejected (never zero)", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const body = {
       schema_version: SCHEMA_VERSION,
       session_id: session,
       plot_id: plotId,
-      language: "es",
-      observation: { observed_at: null, symptoms: [], user_statement: "manchas", measurements: [], completeness: "partial",
-        answers: [{ need_code: "symptom_onset_days", value: 0, unit: "d", raw_text: "no sé", unknown: true }] },
+      language: "en",
+      observation: { observed_at: null, symptoms: [], user_statement: "spots", measurements: [], completeness: "partial",
+        answers: [{ need_code: "symptom_onset_days", value: 0, unit: "d", raw_text: "I don't know", unknown: true }] },
       asked_need_codes: [],
       plot_context: { crop: "coffee", variety: null },
       is_demo: true,
@@ -341,8 +341,8 @@ describe("asesor mock (v2: information_needs)", () => {
     assert.ok(ErrorBody.parse(res.json).error.details.some((d) => d.field === "observation.answers[0].value"));
   });
 
-  it("orienta con protocolo, sin confirmar enfermedad, y menciona primero un caso verificado", async () => {
-    const res = await assessFor(KNOWN_PHONE, [known("leaf_underside", "polvo naranja o amarillo")]);
+  it("advises per protocol, without confirming disease, and mentions a verified case first", async () => {
+    const res = await assessFor(KNOWN_PHONE, [known("leaf_underside", "orange or yellow powder")]);
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "advise");
     assert.equal(res.data.suspected_issue?.certainty, "suspected");
@@ -351,54 +351,54 @@ describe("asesor mock (v2: information_needs)", () => {
     assert.equal(res.data.resolved_case_mentions[0]?.verification, "verified");
   });
 
-  it("caso resuelto con producto y dosis: nunca se menciona", async () => {
+  it("resolved case with product and dose: never mentioned", async () => {
     const saved = state.resolutions.splice(0, state.resolutions.length);
     state.resolutions.push(...saved.filter((r) => r.matches_protocol === false));
     try {
-      const res = await assessFor(KNOWN_PHONE, [known("leaf_underside", "polvo naranja o amarillo")]);
+      const res = await assessFor(KNOWN_PHONE, [known("leaf_underside", "orange or yellow powder")]);
       assert.ok(res.ok);
       assert.deepEqual(res.data.resolved_case_mentions, []);
-      assert.doesNotMatch(JSON.stringify(res.data), /fungicida|ml por litro/);
+      assert.doesNotMatch(JSON.stringify(res.data), /fungicide|ml per liter/);
     } finally {
       state.resolutions.splice(0, state.resolutions.length, ...saved);
     }
   });
 
-  it("pregunta por fungicida o dosis → deriva", async () => {
-    const res = await assessFor(KNOWN_PHONE, [], { statement: "¿Qué fungicida le echo y qué dosis?" });
+  it("asks about fungicide or dose → refers", async () => {
+    const res = await assessFor(KNOWN_PHONE, [], { statement: "What fungicide should I spray and what dose?" });
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "refer");
     assert.equal(res.data.human_review_required, true);
   });
 
-  it("límite de 5 preguntas → deriva", async () => {
+  it("5-question limit → refers", async () => {
     const asked = ["local_weather_perception", "leaf_underside", "spot_appearance", "affected_extent", "leaf_drop"];
     const res = await assessFor(KNOWN_PHONE, [], { asked });
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "refer");
   });
 
-  it("parcela fuera de cobertura: lo declara en data_used sin inventar datos", async () => {
+  it("plot out of coverage: declares it in data_used without making up data", async () => {
     const res = await assessFor("+12025550104", []);
     assert.ok(res.ok);
-    assert.match(res.data.data_used[0]!.summary, /fuera de cobertura/);
+    assert.match(res.data.data_used[0]!.summary, /out of coverage/);
     assert.equal(res.data.data_used[0]!.data_freshness, "unknown");
   });
 
-  it("parcela sin contexto → deriva", async () => {
+  it("plot without context → refers", async () => {
     const res = await assessFor("+12025550108", [], { crop: null });
     assert.ok(res.ok);
     assert.equal(res.data.disposition, "refer");
     assert.equal(res.data.human_review_required, true);
   });
 
-  it("asesor caído → 503 reintentable", async () => {
+  it("advisor down → retryable 503", async () => {
     const res = await client.assess(
       {
         schema_version: SCHEMA_VERSION,
         session_id: "s",
         plot_id: "plot_demo_01",
-        language: "es",
+        language: "en",
         observation: { observed_at: null, symptoms: [], user_statement: "", measurements: [], answers: [], completeness: "partial" },
         asked_need_codes: [],
         plot_context: { crop: "coffee", variety: null },
@@ -412,8 +412,8 @@ describe("asesor mock (v2: information_needs)", () => {
   });
 });
 
-describe("contexto de parcela", () => {
-  it("incluye el resumen ambiental con unidades; sin resumen → null", async () => {
+describe("plot context", () => {
+  it("includes the environmental summary with units; no summary → null", async () => {
     const session = newSession();
     const plotId = await confirmFirst(session, KNOWN_PHONE);
     const context = await client.getPlotContext(plotId, session);
@@ -429,7 +429,7 @@ describe("contexto de parcela", () => {
   });
 });
 
-describe("seguimientos (v2)", () => {
+describe("follow-ups (v2)", () => {
   const NOW = "2026-10-03T23:00:00.000Z";
 
   function attempt(session: string, status: "contacting" | "no_response" | "failed") {
@@ -450,8 +450,8 @@ describe("seguimientos (v2)", () => {
       session_id: session,
       channel: "voice" as const,
       status_reported,
-      user_statement: status_reported === "resolved" ? "Ya no salen manchas desde que quité las hojas" : "Sigue igual o peor",
-      actions_taken: "Quitó hojas con manchas y regó menos",
+      user_statement: status_reported === "resolved" ? "No more spots since I removed the leaves" : "Same or worse",
+      actions_taken: "Removed spotted leaves and watered less",
       action_worked: status_reported === "resolved" ? ("yes" as const) : ("no" as const),
       change_noticed_at: null,
       provider_reference: `conv_${session}`,
@@ -459,7 +459,7 @@ describe("seguimientos (v2)", () => {
     };
   }
 
-  it("lista los vencidos con resumen del caso y contacto para la llamada", async () => {
+  it("lists due follow-ups with case summary and contact for the call", async () => {
     const res = await client.listFollowups("scheduled");
     assert.ok(res.ok);
     const due = res.data.followups.find((f) => f.followup_id === "followup_demo_05");
@@ -471,7 +471,7 @@ describe("seguimientos (v2)", () => {
     assert.equal(due.contact.timezone, "America/Mexico_City");
   });
 
-  it("llamada saliente: `contacting` liga la sesión; sin respuesta no cierra nada", async () => {
+  it("outbound call: `contacting` binds the session; no response closes nothing", async () => {
     const session = newSession();
     const blocked = await client.submitFollowupResponse("followup_demo_05", response(session, "same"), `fu-${session}-early`);
     assert.ok(!blocked.ok);
@@ -484,15 +484,15 @@ describe("seguimientos (v2)", () => {
 
     const replay = await client.recordFollowupAttempt("followup_demo_05", attempt(session, "contacting"), `att-${session}-c`);
     assert.ok(replay.ok && replay.replayed);
-    assert.equal(replay.data.attempt_count, 1, "repetir el callback no cuenta otro intento");
+    assert.equal(replay.data.attempt_count, 1, "repeating the callback doesn't count another attempt");
 
     const silent = await client.recordFollowupAttempt("followup_demo_05", attempt(session, "no_response"), `att-${session}-n`);
     assert.ok(silent.ok);
     assert.equal(silent.data.status, "no_response");
-    assert.equal(state.cases.find((c) => c.id === "case_demo_05")?.status, "suspected", "sin respuesta no cambia el caso");
+    assert.equal(state.cases.find((c) => c.id === "case_demo_05")?.status, "suspected", "no response doesn't change the case");
   });
 
-  it("resuelto: crea una sola resolución y cierra el caso; repetir no duplica", async () => {
+  it("resolved: creates a single resolution and closes the case; repeating doesn't duplicate", async () => {
     const session = newSession();
     const before = state.resolutions.length;
     const started = await client.recordFollowupAttempt("followup_demo_05", attempt(session, "contacting"), `att-${session}-c`);
@@ -510,7 +510,7 @@ describe("seguimientos (v2)", () => {
     assert.ok(replay.ok && replay.replayed);
     assert.equal(replay.data.resolution_id, first.data.resolution_id);
 
-    const again = await client.submitFollowupResponse("followup_demo_05", response(session, "resolved"), `fu-${session}-otra`);
+    const again = await client.submitFollowupResponse("followup_demo_05", response(session, "resolved"), `fu-${session}-other`);
     assert.ok(!again.ok);
     assert.equal(again.code, "FOLLOWUP_CLOSED");
 
@@ -518,10 +518,10 @@ describe("seguimientos (v2)", () => {
     const created = state.resolutions.find((r) => r.id === first.data.resolution_id)!;
     assert.equal(created.verification, "farmer_reported");
     assert.equal(created.matches_protocol, null);
-    assert.equal(created.solution_statement, "Quitó hojas con manchas y regó menos");
+    assert.equal(created.solution_statement, "Removed spotted leaves and watered less");
   });
 
-  it("empeora: programa otro seguimiento y no crea resolución", async () => {
+  it("worse: schedules another follow-up and creates no resolution", async () => {
     const session = newSession();
     await confirmFirst(session, "+12025550106");
     const res = await client.submitFollowupResponse("followup_demo_06", response(session, "worse"), `fu-${session}`);
@@ -532,8 +532,8 @@ describe("seguimientos (v2)", () => {
   });
 });
 
-describe("consentimiento (PROPUESTO)", () => {
-  it("guarda los permisos por separado; uno nunca preguntado queda en false, como en el backend", async () => {
+describe("consent (PROPOSED)", () => {
+  it("saves permissions separately; one never asked stays false, as in the backend", async () => {
     const session = newSession();
     const found = await client.resolveContact(resolution(session, "+12025550107"));
     assert.ok(found.ok);
@@ -557,11 +557,11 @@ describe("consentimiento (PROPUESTO)", () => {
     assert.ok(res.ok);
     assert.equal(res.data.consent.reports, true);
     assert.equal(res.data.consent.notifications, false);
-    assert.equal(res.data.consent.followup_calls, false, "consent_at ya no es null: false = no autoriza");
+    assert.equal(res.data.consent.followup_calls, false, "consent_at is no longer null: false = not authorized");
     assert.ok(res.data.consent.consent_at);
   });
 
-  it("sin agricultor confirmado en la sesión → 403", async () => {
+  it("no confirmed farmer in the session → 403", async () => {
     const res = await client.recordConsent(
       {
         schema_version: SCHEMA_VERSION,
@@ -580,22 +580,22 @@ describe("consentimiento (PROPUESTO)", () => {
     assert.equal(res.code, "FARMER_NOT_CONFIRMED");
   });
 
-  it("BAJA revoca avisos y seguimientos de ese teléfono; desconocido → 0", async () => {
+  it("ALERTS OFF revokes alerts and follow-ups for that phone; unknown → 0", async () => {
     const body = (phone: string) => ({
       schema_version: SCHEMA_VERSION,
       phone_e164: phone,
       channel: "sms" as const,
       scopes: ["notifications" as const, "followup_calls" as const],
-      provider_reference: "SM_demo_baja",
+      provider_reference: "SM_demo_alerts_off",
       is_demo: true,
     });
-    const res = await client.revokeConsent(body("+12025550102"), "revocation-SM_demo_baja");
+    const res = await client.revokeConsent(body("+12025550102"), "revocation-SM_demo_alerts_off");
     assert.ok(res.ok);
     assert.equal(res.data.contacts_updated, 1);
     const contact = state.contacts.find((c) => c.id === "contact_demo_02")!;
     assert.equal(contact.notification_consent, false);
     assert.equal(contact.followup_call_consent, false);
-    assert.equal(contact.report_consent, true, "BAJA no toca el permiso de guardar reportes");
+    assert.equal(contact.report_consent, true, "ALERTS OFF doesn't touch the permission to save reports");
 
     const unknown = await client.revokeConsent(body(UNKNOWN_PHONE), "revocation-SM_demo_unknown");
     assert.ok(unknown.ok);
@@ -604,7 +604,7 @@ describe("consentimiento (PROPUESTO)", () => {
 });
 
 describe("cliente", () => {
-  it("rechaza respuestas que no cumplen el contrato", async () => {
+  it("rejects responses that don't match the contract", async () => {
     const fakeFetch = (async () =>
       new Response(JSON.stringify({ report_id: "r", case_id: "c" }), { status: 201 })) as typeof fetch;
     const bad = new BackendClient({ baseUrl, serviceToken: TOKEN, fetch: fakeFetch });
@@ -613,7 +613,7 @@ describe("cliente", () => {
     assert.equal(res.kind, "invalid_response");
   });
 
-  it("el asesor va a su propia URL; sin token no se envía Authorization (backend real)", async () => {
+  it("the advisor goes to its own URL; without a token no Authorization is sent (real backend)", async () => {
     const seen: { url: string; auth: string | null }[] = [];
     const spy = (async (input: string | URL | Request, init?: RequestInit) => {
       seen.push({ url: String(input), auth: new Headers(init?.headers).get("authorization") });
@@ -625,8 +625,8 @@ describe("cliente", () => {
       schema_version: SCHEMA_VERSION,
       session_id: "s",
       plot_id: "plot_demo_01",
-      language: "es",
-      observation: { observed_at: null, symptoms: [], user_statement: "manchas", measurements: [], answers: [], completeness: "partial" },
+      language: "en",
+      observation: { observed_at: null, symptoms: [], user_statement: "spots", measurements: [], answers: [], completeness: "partial" },
       asked_need_codes: [],
       plot_context: { crop: "coffee", variety: null },
       is_demo: true,
@@ -637,7 +637,7 @@ describe("cliente", () => {
     ]);
   });
 
-  it("un error sin la forma uniforme (FastAPI del asesor) es un error HTTP con su código", async () => {
+  it("an error without the uniform shape (the advisor's FastAPI) is an HTTP error with its code", async () => {
     const reply = (status: number, body: unknown) =>
       new BackendClient({ baseUrl, fetch: (async () => new Response(JSON.stringify(body), { status })) as typeof fetch });
 

@@ -1,18 +1,18 @@
 /**
- * Asesor mock y determinista (contrato v2) para probar voz/SMS sin el
- * Integrante 2. No diagnostica: devuelve `information_needs` (nunca el texto
- * de la pregunta), declara en `data_used` lo que "consultó" y ejerce las tres
- * disposiciones. Su contenido agronómico es sintético y no debe presentarse
- * como real.
+ * Deterministic mock advisor (v2 contract) to test voice/SMS without Member 2.
+ * It doesn't diagnose: it returns `information_needs` (never the question
+ * text), declares in `data_used` what it "queried" and exercises all three
+ * dispositions. Its agronomic content is synthetic and must not be presented
+ * as real.
  *
- * Reglas que imita (secciones 5.1 y 17):
- *  - Primer turno con descripción: dos necesidades fijas (`local_weather_perception`
- *    y `leaf_underside`), como el ejemplo 10.1.
- *  - No repite necesidades de `asked_need_codes` ni ya respondidas.
- *  - Máximo 5 preguntas; después, deriva.
- *  - Fungicida, producto o dosis → `refer` (protocolo `coffee-rust-demo-v1`).
- *  - Casos resueltos: prefiere `verified`; omite los que no coinciden con el
- *    protocolo; de los no revisados no repite la solución.
+ * Rules it mimics (sections 5.1 and 17):
+ *  - First turn with a description: two fixed needs (`local_weather_perception`
+ *    and `leaf_underside`), like example 10.1.
+ *  - Never repeats needs in `asked_need_codes` or already answered.
+ *  - At most 5 questions; after that, refers.
+ *  - Fungicide, product or dose → `refer` (protocol `coffee-rust-demo-v1`).
+ *  - Resolved cases: prefers `verified`; leaves out those that don't match the
+ *    protocol; for unreviewed ones, never repeats the solution.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -34,47 +34,47 @@ type NeedTemplate = Omit<InformationNeed, "priority">;
 const NEEDS: Record<string, NeedTemplate> = {
   local_weather_perception: {
     need_code: "local_weather_perception",
-    variable: "Lluvia y humedad recientes en la parcela",
-    reason: "Los datos de la zona muestran humedad por encima de lo normal; confirmar si en la parcela también",
-    farmer_hint: "Preguntar cómo ha estado el clima estos días: si ha llovido, si ha estado nublado o húmedo",
+    variable: "Recent rain and humidity on the plot",
+    reason: "Area data shows above-normal humidity; confirm whether the plot does too",
+    farmer_hint: "Ask how the weather has been these days: whether it has rained, been cloudy or humid",
     answer_type: "free_text",
     options: null,
     can_be_unknown: true,
   },
   leaf_underside: {
     need_code: "leaf_underside",
-    variable: "Aspecto del envés de las hojas afectadas",
-    reason: "Distingue roya de ojo de gallo y minador",
-    farmer_hint: "Preguntar qué ve en la parte de abajo de las hojas: polvito naranja, pelusa blanca, bichitos o nada",
+    variable: "Appearance of the underside of affected leaves",
+    reason: "Tells rust apart from American leaf spot and leaf miner",
+    farmer_hint: "Ask what they see on the underside of the leaves: orange powder, white fuzz, little bugs or nothing",
     answer_type: "choice",
-    options: ["polvo naranja o amarillo", "pelusa blanca", "insectos o galerías", "nada", "no sé"],
+    options: ["orange or yellow powder", "white fuzz", "insects or tunnels", "nothing", "don't know"],
     can_be_unknown: true,
   },
   spot_appearance: {
     need_code: "spot_appearance",
-    variable: "Color y forma de las manchas",
-    reason: "Distingue roya de mancha de hierro y ojo de gallo",
-    farmer_hint: "Preguntar de qué color y forma son las manchas por encima de la hoja",
+    variable: "Color and shape of the spots",
+    reason: "Tells rust apart from brown eye spot and American leaf spot",
+    farmer_hint: "Ask what color and shape the spots are on the top of the leaf",
     answer_type: "choice",
-    options: ["manchas amarillas o naranjas", "manchas cafés con centro claro", "manchas redondas grises", "otro"],
+    options: ["yellow or orange spots", "brown spots with a light center", "round gray spots", "other"],
     can_be_unknown: true,
   },
   affected_extent: {
     need_code: "affected_extent",
-    variable: "Extensión del problema en la parcela",
-    reason: "Urgencia y extensión",
-    farmer_hint: "Preguntar si son pocas plantas, un sector o casi toda la parcela",
+    variable: "How widespread the problem is on the plot",
+    reason: "Urgency and extent",
+    farmer_hint: "Ask whether it is a few plants, one section or almost the whole plot",
     answer_type: "choice",
-    options: ["pocas plantas", "un sector", "casi toda la parcela", "no sé"],
+    options: ["a few plants", "one section", "almost the whole plot", "don't know"],
     can_be_unknown: true,
   },
 };
 
 const ORDER_WITH_DESCRIPTION = ["local_weather_perception", "leaf_underside", "spot_appearance", "affected_extent"];
 const ORDER_WITHOUT_DESCRIPTION = ["spot_appearance", "affected_extent", "leaf_underside", "local_weather_perception"];
-/** Una respuesta conocida a cualquiera de estas basta para orientar en la demo. */
+/** A known answer to any of these is enough to give guidance in the demo. */
 const DECISIVE = new Set(["leaf_underside", "spot_appearance"]);
-const PRODUCT_QUESTION = /fungicida|producto|dosis|veneno|qu[ií]mico|qu[eé] le (echo|pongo|aplico)/i;
+const PRODUCT_QUESTION = /fungicide|product|dose|dosage|poison|chemical|what (should|can|do) i (spray|apply|put|use)/i;
 
 export interface AdvisorContext {
   environment: EnvironmentSummary | null;
@@ -91,17 +91,17 @@ function base(): Pick<AssessmentResponse, "schema_version" | "assessment_id" | "
   };
 }
 
-/** Lo que el asesor "consultó" en vez de preguntar. Fuera de cobertura se declara, no se inventa. */
+/** What the advisor "queried" instead of asking. Out of coverage is declared, never made up. */
 function dataUsed(environment: EnvironmentSummary | null): DataUsed[] {
   if (!environment) return [];
   const humidity = environment.features.find((f) => f.name === "humidity_mean_14d");
   if (!humidity || humidity.value === null) {
-    return [{ query_id: `q_${randomUUID()}`, summary: "Sin datos ambientales para la parcela (fuera de cobertura)", data_freshness: "unknown", dataset_ids: [] }];
+    return [{ query_id: `q_${randomUUID()}`, summary: "No environmental data for the plot (out of coverage)", data_freshness: "unknown", dataset_ids: [] }];
   }
   return [
     {
       query_id: `q_${randomUUID()}`,
-      summary: `Humedad promedio 14 días de ${humidity.value} ${humidity.unit}, por encima de lo normal`,
+      summary: `14-day mean humidity of ${humidity.value} ${humidity.unit}, above normal`,
       data_freshness: environment.data_freshness,
       dataset_ids: environment.dataset_ids,
     },
@@ -129,8 +129,8 @@ function mentionFor(resolution: FixtureResolution): ResolvedCaseMention | null {
   const summary =
     resolution.matches_protocol === true && resolution.speech_summary
       ? resolution.speech_summary
-      : // Sin revisar contra el protocolo: no se repite la solución, solo el desenlace.
-        "Otro agricultor de la zona con un problema parecido contó que su parcela mejoró; un técnico aún no lo ha revisado";
+      : // Not checked against the protocol: only the outcome is repeated, never the solution.
+        "Another farmer in the area with a similar problem said their plot improved; a technician hasn't reviewed it yet";
   return { resolution_id: resolution.id, summary_for_speech: summary, verification: resolution.verification };
 }
 
@@ -163,15 +163,15 @@ export function assess(request: AssessmentRequest, ctx: AdvisorContext): Assessm
     return {
       ...base(),
       disposition: "advise",
-      suspected_issue: { code: THREAT_CODE, label: "Posible roya del café (demostración)", certainty: "suspected" },
+      suspected_issue: { code: THREAT_CODE, label: "Possible coffee leaf rust (demo)", certainty: "suspected" },
       evidence_quality: "low",
       urgency: "soon",
       information_needs: [],
       data_used: data,
       resolved_case_mentions: resolvedCaseMentions(ctx.resolutions),
       recommendations: [
-        { code: "remove_affected_leaves", text: "Retira las hojas con manchas y entiérralas lejos de las plantas.", protocol_id: PROTOCOL_ID, source_ids: sourceIds },
-        { code: "monitor_neighbor_plants", text: "Revisa las plantas vecinas en los próximos días.", protocol_id: PROTOCOL_ID, source_ids: sourceIds },
+        { code: "remove_affected_leaves", text: "Remove the spotted leaves and bury them away from the plants.", protocol_id: PROTOCOL_ID, source_ids: sourceIds },
+        { code: "monitor_neighbor_plants", text: "Check the neighboring plants over the next few days.", protocol_id: PROTOCOL_ID, source_ids: sourceIds },
       ],
       human_review_required: true,
       source_ids: sourceIds,

@@ -1,13 +1,12 @@
 /**
- * Estado en memoria del mock. Es suficiente para probar contratos, pero se
- * pierde al reiniciar: el backend real (Integrante 3) persiste la
- * idempotencia en PostgreSQL.
+ * The mock's in-memory state. Enough to test contracts, but lost on restart:
+ * the real backend (Member 3) persists idempotency in PostgreSQL.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { ReportDetail } from "../contracts/index.ts";
 import * as fixtures from "./fixtures.ts";
 
-/** Como el backend real (`candidate_token_ttl_s` = 900). */
+/** Like the real backend (`candidate_token_ttl_s` = 900). */
 const CANDIDATE_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 interface CandidateGrant {
@@ -22,7 +21,7 @@ interface SessionGrant {
   plot_ids: Set<string>;
 }
 
-/** JSON canónico (claves ordenadas) para comparar cuerpos con la misma clave. */
+/** Canonical JSON (sorted keys) to compare bodies sent with the same key. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") {
@@ -47,7 +46,7 @@ export class MockState {
   readonly resolutions = structuredClone(fixtures.resolutions);
   readonly environment = structuredClone(fixtures.environment);
   readonly reports = new Map<string, ReportDetail>();
-  /** `scope\0key` → respuesta original y huella del cuerpo (Idempotency-Key). */
+  /** `scope\0key` → original response and body fingerprint (Idempotency-Key). */
   readonly idempotency = new Map<string, { fingerprint: string; status: number; body: unknown }>();
 
   private readonly candidateGrants = new Map<string, CandidateGrant>();
@@ -55,7 +54,7 @@ export class MockState {
 
   constructor(
     private readonly now: () => Date = () => new Date(),
-    /** contact_id → teléfono de prueba propio (p. ej. tu celular), para probar con SMS reales. */
+    /** contact_id → your own test phone (e.g. your cell), to test with real SMS. */
     phoneOverrides: Record<string, string> = {},
   ) {
     for (const contact of this.contacts) {
@@ -72,7 +71,7 @@ export class MockState {
     return `${prefix}_${randomUUID()}`;
   }
 
-  // --- Contactos y sesiones ---
+  // --- Contacts and sessions ---
 
   farmersForPhone(phone: string) {
     const contactIds = new Set(this.contacts.filter((c) => c.phone_e164 === phone).map((c) => c.id));
@@ -95,7 +94,7 @@ export class MockState {
     return token;
   }
 
-  /** El token solo vale para la misma sesión y el mismo teléfono que lo pidieron. */
+  /** The token is only valid for the same session and phone that requested it. */
   redeemCandidateToken(token: string, sessionId: string, phone: string): string | null {
     const grant = this.candidateGrants.get(token);
     if (!grant) return null;
@@ -111,8 +110,8 @@ export class MockState {
   }
 
   /**
-   * Llamada saliente de seguimiento: no hay contact-resolution, así que el
-   * intento `contacting` liga la sesión a la parcela del caso (solo el mock lo exige).
+   * Outbound follow-up call: there is no contact-resolution, so the
+   * `contacting` attempt binds the session to the case's plot (only the mock requires it).
    */
   grantFollowupSession(sessionId: string, farmerId: string, plotId: string): void {
     const grant = this.sessionGrants.get(sessionId);
@@ -129,9 +128,9 @@ export class MockState {
     return this.sessionGrants.get(sessionId)?.plot_ids.has(plotId) ?? false;
   }
 
-  // --- Casos ---
+  // --- Cases ---
 
-  /** Asocia el reporte a un caso abierto de la misma parcela/amenaza o crea uno nuevo. */
+  /** Links the report to an open case for the same plot/threat or creates a new one. */
   attachCase(plotId: string, observedAt: string | null, receivedAt: string, symptoms: string[] = []) {
     const open = this.cases.find(
       (c) => c.plot_id === plotId && c.threat_code === fixtures.THREAT_CODE && c.status !== "resolved",
@@ -156,14 +155,14 @@ export class MockState {
     return created;
   }
 
-  // --- Seguimientos ---
+  // --- Follow-ups ---
 
   farmerOfPlot(plotId: string) {
     const plot = this.plots.find((p) => p.id === plotId);
     return plot ? this.farmers.find((f) => f.id === plot.farmer_id) : undefined;
   }
 
-  /** Programa el siguiente seguimiento del caso (intervalo de demo de la sección 17). */
+  /** Schedules the case's next follow-up (section 17's demo interval). */
   scheduleFollowup(caseId: string): fixtures.FixtureFollowup {
     const followup: fixtures.FixtureFollowup = {
       id: this.newId("followup"),
@@ -180,9 +179,9 @@ export class MockState {
     return followup;
   }
 
-  // --- Consentimiento ---
+  // --- Consent ---
 
-  /** Revoca permisos de todos los contactos con ese teléfono; devuelve cuántos cambiaron. */
+  /** Revokes permissions for every contact with that phone; returns how many changed. */
   revokeByPhone(phone: string, scopes: ("notifications" | "followup_calls")[]): number {
     let updated = 0;
     for (const contact of this.contacts.filter((c) => c.phone_e164 === phone)) {
@@ -197,8 +196,8 @@ export class MockState {
 }
 
 /**
- * Como la tabla `contacts` del backend: cada permiso es un booleano (por defecto false) y solo
- * `consent_at: null` significa "nunca se preguntó". Al guardar cualquier permiso, los no preguntados quedan en false.
+ * Like the backend's `contacts` table: each permission is a boolean (false by default) and only
+ * `consent_at: null` means "never asked". Saving any permission leaves the unasked ones as false.
  */
 export function settleConsent(contact: fixtures.FixtureContact): void {
   contact.report_consent ??= false;

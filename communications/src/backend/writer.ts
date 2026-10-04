@@ -1,11 +1,11 @@
 /**
- * Escrituras al backend con Idempotency-Key fija y reintentos acotados
- * (máximo 3 intentos en total ante fallos transitorios). Un timeout es
- * ambiguo: se reintenta con la MISMA clave, así el backend devuelve el
- * original si la primera escritura sí ocurrió. Nunca se cambia la clave.
+ * Backend writes with a fixed Idempotency-Key and bounded retries (at most 3
+ * attempts in total on transient failures). A timeout is ambiguous: it is
+ * retried with the SAME key, so the backend returns the original if the first
+ * write did happen. The key never changes.
  *
- * Lo usan el reporte, la respuesta de seguimiento, el consentimiento, la baja
- * y los intentos de seguimiento.
+ * Used by the report, the follow-up response, consent, opt-out and follow-up
+ * attempts.
  */
 import type { BackendClient, BackendResult } from "./client.ts";
 import type {
@@ -24,12 +24,12 @@ import { log } from "../http/log.ts";
 
 export type WriteOutcome<T> =
   | { status: "saved"; data: T }
-  /** No confirmado todavía; hay reintentos programados. No decir "registrado". */
+  /** Not confirmed yet; retries are scheduled. Don't say "recorded". */
   | { status: "pending" }
   | { status: "failed"; code: string };
 
 function isTransient(result: Extract<BackendResult<unknown>, { ok: false }>): boolean {
-  // invalid_response tras una escritura también es ambiguo; reintentar con la misma clave es seguro.
+  // invalid_response after a write is also ambiguous; retrying with the same key is safe.
   return result.kind !== "http" || result.retryable;
 }
 
@@ -38,7 +38,7 @@ export class BackendWriter {
 
   constructor(
     private readonly client: BackendClient,
-    /** Esperas antes del 2.º y 3.er intento. */
+    /** Waits before the 2nd and 3rd attempts. */
     private readonly retryDelaysMs: number[],
   ) {}
 
@@ -54,18 +54,18 @@ export class BackendWriter {
     return this.write("followup_attempt", body.session_id, () => this.client.recordFollowupAttempt(followupId, body));
   }
 
-  /** Una escritura por sesión (SMS); en voz, una por cada `record_consent` de la llamada. */
+  /** One write per session (SMS); in voice, one per `record_consent` in the call. */
   recordConsent(body: ConsentRequest, key = `consent-${body.session_id}`): Promise<WriteOutcome<ConsentRecorded>> {
     return this.write("consent", body.session_id, () => this.client.recordConsent(body, key));
   }
 
-  /** La baja se deduplica por el MessageSid del SMS que la pidió. */
+  /** The opt-out is deduplicated by the MessageSid of the SMS that requested it. */
   revokeConsent(body: ConsentRevocationRequest, messageSid: string): Promise<WriteOutcome<ConsentRevoked>> {
     const key = `revocation-${messageSid}`;
     return this.write("consent_revocation", key, () => this.client.revokeConsent(body, key));
   }
 
-  /** Escritura en segundo plano (no bloquea la respuesta al usuario); `drain()` también la espera. */
+  /** Background write (doesn't block the reply to the user); `drain()` waits for it too. */
   track(write: Promise<unknown>): void {
     const tracked = write.then(
       () => undefined,
@@ -75,7 +75,7 @@ export class BackendWriter {
     void tracked.then(() => this.inFlight.delete(tracked));
   }
 
-  /** Para pruebas y apagado ordenado: espera a que terminen los reintentos pendientes. */
+  /** For tests and graceful shutdown: waits for pending retries to finish. */
   async drain(): Promise<void> {
     while (this.inFlight.size > 0) await Promise.all([...this.inFlight]);
   }

@@ -1,22 +1,22 @@
 /**
- * Despachador de `followup.due` (secciones 2.2, 11 y 17): decide si llamar,
- * enviar el SMS de respaldo o esperar.
+ * `followup.due` dispatcher (sections 2.2, 11 and 17): decides whether to call,
+ * send the fallback SMS or wait.
  *
- *  - Solo con permiso de seguimiento, en horario permitido (08:00–19:00 hora
- *    local por defecto) y, en demo, a números de la lista blanca.
- *  - Hasta 3 intentos de llamada (agente de seguimiento de ElevenLabs con
- *    variables dinámicas); después, un SMS. Tras el SMS sin respuesta no se
- *    vuelve a contactar.
- *  - La llamada se registra como intento `contacting` en cuanto ElevenLabs la
- *    acepta; eso liga la sesión a la parcela para que las herramientas del
- *    agente puedan guardar.
- *  - Si en `callResultTimeoutMs` no llegó `submit_followup`, se registra
- *    `no_response` (el backend reprograma el reintento). Nunca baja el riesgo.
- *  - Una llamada ambigua (timeout de ElevenLabs) no se repite: se registra
- *    como `contacting` y se concilia por el mismo vencimiento.
+ *  - Only with follow-up permission, within allowed hours (08:00–19:00 local
+ *    time by default) and, in demo, to allowlisted numbers.
+ *  - Up to 3 call attempts (ElevenLabs follow-up agent with dynamic
+ *    variables); then one SMS. If the SMS goes unanswered there is no further
+ *    contact.
+ *  - The call is recorded as a `contacting` attempt as soon as ElevenLabs
+ *    accepts it; that binds the session to the plot so the agent's tools can
+ *    save.
+ *  - If `submit_followup` hasn't arrived within `callResultTimeoutMs`,
+ *    `no_response` is recorded (the backend reschedules the retry). Never lowers the risk.
+ *  - An ambiguous call (ElevenLabs timeout) is not repeated: it is recorded as
+ *    `contacting` and reconciled by the same expiry.
  *
- * El evento llega por `POST /v1/followups/{id}/dispatch` (PROPUESTO) o por
- * sondeo de `GET /v1/followups`; ambos caminos terminan en `dispatch()`.
+ * The event arrives via `POST /v1/followups/{id}/dispatch` (PROPOSED) or by
+ * polling `GET /v1/followups`; both paths end in `dispatch()`.
  */
 import { randomUUID } from "node:crypto";
 import type { BackendClient } from "../backend/client.ts";
@@ -28,10 +28,10 @@ import { canContact } from "../policy/outreach.ts";
 import type { FollowupSmsFlow, FollowupStartResult } from "../sms/followup.ts";
 import { KeyedMutex } from "../util.ts";
 
-/** Nombre hablado de cada amenaza; el `threat_code` no se le dice al agricultor. */
-const THREAT_LABELS: Record<string, string> = { coffee_leaf_rust: "roya del café" };
+/** Spoken name of each threat; the `threat_code` is never said to the farmer. */
+const THREAT_LABELS: Record<string, string> = { coffee_leaf_rust: "coffee leaf rust" };
 
-/** Fallos transitorios seguidos al colocar la llamada antes de marcar el seguimiento como fallido. */
+/** Consecutive transient failures placing the call before the follow-up is marked as failed. */
 const MAX_PLACEMENT_FAILURES = 3;
 
 export type DispatchResult =
@@ -49,13 +49,13 @@ export interface DispatcherDeps {
   followupSms: FollowupSmsFlow;
   isDemo: boolean;
   demoAllowlist: ReadonlySet<string>;
-  /** DEMO_IGNORE_ALLOWED_HOURS (solo demo). */
+  /** DEMO_IGNORE_ALLOWED_HOURS (demo only). */
   ignoreAllowedHours?: boolean;
-  /** Intentos de llamada antes del SMS (3 en la sección 17). */
+  /** Call attempts before the SMS (3 in section 17). */
   callAttempts: number;
-  /** Cuánto esperar `submit_followup` tras colocar la llamada antes de registrar `no_response`. */
+  /** How long to wait for `submit_followup` after placing the call before recording `no_response`. */
   callResultTimeoutMs: number;
-  /** Espera tras un fallo transitorio de ElevenLabs al colocar la llamada. */
+  /** Wait after a transient ElevenLabs failure placing the call. */
   placementBackoffMs: number;
   now?: () => Date;
 }
@@ -66,7 +66,7 @@ interface PendingCall {
   placed_at: number;
 }
 
-/** Variables que recibe el agente de seguimiento; su prompt y herramientas no pueden usar otras (las comprueba `agents:check`). */
+/** Variables the follow-up agent receives; its prompt and tools can't use any others (checked by `agents:check`). */
 export const FOLLOWUP_DYNAMIC_VARIABLES = [
   "farmer_name",
   "threat_label",
@@ -78,13 +78,13 @@ export const FOLLOWUP_DYNAMIC_VARIABLES = [
   "attempt_number",
 ] as const;
 
-/** Variables dinámicas del agente de seguimiento. Sin teléfono ni coordenadas: el modelo las ve. */
+/** Dynamic variables for the follow-up agent. No phone or coordinates: the model sees them. */
 export function followupVariables(item: FollowupListItem, sessionId: string): DynamicVariables & Record<(typeof FOLLOWUP_DYNAMIC_VARIABLES)[number], string | number> {
   return {
     farmer_name: item.case_summary.farmer_name,
-    threat_label: THREAT_LABELS[item.case_summary.threat_code] ?? "el problema que reportó",
-    symptoms: item.case_summary.symptoms.length > 0 ? item.case_summary.symptoms.join(", ") : "sin detalle",
-    guidance_given: item.case_summary.guidance_given ?? "ninguna",
+    threat_label: THREAT_LABELS[item.case_summary.threat_code] ?? "the problem you reported",
+    symptoms: item.case_summary.symptoms.length > 0 ? item.case_summary.symptoms.join(", ") : "no details",
+    guidance_given: item.case_summary.guidance_given ?? "none",
     followup_id: item.followup_id,
     plot_id: item.plot_id,
     session_id: sessionId,
@@ -97,16 +97,16 @@ export class FollowupDispatcher {
   private readonly locks = new KeyedMutex();
   private readonly pending = new Map<string, PendingCall>();
   private readonly backoff = new Map<string, { until: number; failures: number }>();
-  /** Último fallo del sondeo: se registra al cambiar, no en cada intervalo (el backend real aún no tiene GET /v1/followups). */
+  /** Last polling failure: logged when it changes, not on every interval (the real backend doesn't have GET /v1/followups yet). */
   private lastPollFailure: string | null = null;
 
   constructor(private readonly deps: DispatcherDeps) {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** `followup.due` para un ID: busca el seguimiento abierto y lo despacha. */
+  /** `followup.due` for one ID: finds the open follow-up and dispatches it. */
   async dispatchById(followupId: string): Promise<DispatchResult> {
-    // Sin sondeo, el evento es lo único que vence las llamadas sin resultado: si no, una llamada vieja bloquea para siempre.
+    // Without polling, the event is the only thing that expires calls with no result: otherwise an old call blocks forever.
     await this.sweep();
     for (const status of ["scheduled", "no_response", "contacting"] as const) {
       const list = await this.deps.client.listFollowups(status);
@@ -121,7 +121,7 @@ export class FollowupDispatcher {
     return this.locks.run(item.followup_id, () => this.dispatchLocked(item));
   }
 
-  /** Respaldo del evento: despacha los vencidos y concilia llamadas sin resultado. */
+  /** Event fallback: dispatches due follow-ups and reconciles calls with no result. */
   async poll(): Promise<DispatchResult[]> {
     await this.sweep();
     const results: DispatchResult[] = [];
@@ -139,19 +139,19 @@ export class FollowupDispatcher {
     return results;
   }
 
-  /** Llamadas colocadas sin `submit_followup` dentro del plazo → `no_response`. */
+  /** Calls placed without `submit_followup` within the deadline → `no_response`. */
   async sweep(): Promise<void> {
     const now = this.now().getTime();
     const expired = [...this.pending.values()].filter((p) => now - p.placed_at > this.deps.callResultTimeoutMs);
     if (expired.length === 0) return;
 
     const contacting = await this.deps.client.listFollowups("contacting");
-    if (!contacting.ok) return; // se reintenta en el próximo barrido
+    if (!contacting.ok) return; // retried on the next sweep
     const stillOpen = new Set(contacting.data.followups.map((f) => f.followup_id));
 
     for (const call of expired) {
       this.pending.delete(call.followup_id);
-      if (!stillOpen.has(call.followup_id)) continue; // respondió (o el backend lo cerró)
+      if (!stillOpen.has(call.followup_id)) continue; // answered (or the backend closed it)
       this.deps.writer.track(this.recordAttempt(call.followup_id, call.session_id, "no_response", null));
       log("info", "followup_call_no_response", { correlation_id: call.session_id, followup_id: call.followup_id });
     }
@@ -162,7 +162,7 @@ export class FollowupDispatcher {
 
     if (item.status === "contacting" || this.pending.has(item.followup_id)) return this.done({ status: "skipped", reason: "in_progress" }, fields);
     if (item.status !== "scheduled" && item.status !== "no_response") return this.done({ status: "skipped", reason: "closed" }, fields);
-    // El SMS de respaldo ya se envió y tampoco hubo respuesta: no se insiste.
+    // The fallback SMS was already sent and also went unanswered: don't insist.
     if (item.status === "no_response" && item.channel === "sms") return this.done({ status: "skipped", reason: "exhausted" }, fields);
 
     const decision = canContact({
@@ -207,7 +207,7 @@ export class FollowupDispatcher {
     }
     this.backoff.delete(item.followup_id);
 
-    // Colocada o ambigua: la llamada pudo salir, así que la sesión debe poder guardar.
+    // Placed or ambiguous: the call may have gone out, so the session must be able to save.
     const reference = placed.ok ? (placed.conversation_id ?? placed.call_sid) : null;
     const attempt = await this.recordAttempt(item.followup_id, sessionId, "contacting", reference);
     if (attempt.status === "failed") log("error", "followup_call_attempt_not_recorded", { ...fields, correlation_id: sessionId, code: attempt.code });

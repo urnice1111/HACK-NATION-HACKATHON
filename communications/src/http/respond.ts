@@ -6,7 +6,7 @@ import type { ErrorBody, ErrorDetail } from "../contracts/index.ts";
 const MAX_BODY_BYTES = 256 * 1024;
 const SAFE_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
-/** Propaga `X-Request-Id` si es seguro; si no, genera uno (sección 8). */
+/** Propagates `X-Request-Id` when it is safe; otherwise generates one (section 8). */
 export function requestIdFrom(req: IncomingMessage): string {
   const incoming = req.headers["x-request-id"];
   return typeof incoming === "string" && SAFE_ID.test(incoming) ? incoming : `req_${randomUUID()}`;
@@ -22,7 +22,7 @@ export function safeIdHeader(req: IncomingMessage, name: string): string | null 
   return value && SAFE_ID.test(value) ? value : null;
 }
 
-/** Error con la forma uniforme `{"error": {...}}` y su código HTTP. */
+/** Error with the uniform `{"error": {...}}` shape and its HTTP status. */
 export class HttpError extends Error {
   readonly status: number;
   readonly code: string;
@@ -57,7 +57,7 @@ export function readBody(req: IncomingMessage): Promise<string> {
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        reject(new HttpError(400, "PAYLOAD_TOO_LARGE", "El cuerpo excede el tamaño permitido"));
+        reject(new HttpError(400, "PAYLOAD_TOO_LARGE", "Request body exceeds the allowed size"));
         req.destroy();
         return;
       }
@@ -73,7 +73,7 @@ export async function readJson(req: IncomingMessage): Promise<unknown> {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
-    throw new HttpError(400, "INVALID_JSON", "El cuerpo no es JSON válido");
+    throw new HttpError(400, "INVALID_JSON", "Request body is not valid JSON");
   }
 }
 
@@ -82,7 +82,7 @@ export function sendJson(res: ServerResponse, status: number, payload: unknown, 
   res.end(JSON.stringify(payload));
 }
 
-/** Compara `Authorization: Bearer <token>` en tiempo constante. */
+/** Compares `Authorization: Bearer <token>` in constant time. */
 export function bearerMatches(header: string | null, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
   const given = Buffer.from(header.slice("Bearer ".length));
@@ -90,16 +90,16 @@ export function bearerMatches(header: string | null, expected: string): boolean 
   return given.length === wanted.length && timingSafeEqual(given, wanted);
 }
 
-/** Valida un cuerpo contra su esquema; si no cumple, 422 con `details[]` del error uniforme. */
-export function parseBody<T extends z.ZodType>(schema: T, raw: unknown, message = "El cuerpo no cumple el contrato v2"): z.infer<T> {
+/** Validates a body against its schema; on failure, 422 with the uniform error's `details[]`. */
+export function parseBody<T extends z.ZodType>(schema: T, raw: unknown, message = "Request body does not match the v2 contract"): z.infer<T> {
   const result = schema.safeParse(raw);
   if (!result.success) throw new HttpError(422, "VALIDATION_ERROR", message, { details: validationDetails(result.error) });
   return result.data;
 }
 
 /**
- * Errores de zod → `details[]`, con rutas tipo `measurements[0].unit` (sección 8).
- * Nunca incluye el valor recibido: podría ser un teléfono o parte de una transcripción.
+ * zod errors → `details[]`, with paths like `measurements[0].unit` (section 8).
+ * Never includes the received value: it could be a phone number or part of a transcript.
  */
 function validationDetails(error: z.ZodError): ErrorDetail[] {
   return error.issues.flatMap((issue) => {

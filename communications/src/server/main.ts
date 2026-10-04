@@ -15,7 +15,7 @@ import { createCommsServer } from "./app.ts";
 const config = loadConfig();
 const phones = phonesFromEnv((name) => config[name as keyof typeof config] as string | null);
 
-// Los agentes viven en la cuenta de ElevenLabs: se comprueba que estén configurados como espera este código.
+// The agents live in the ElevenLabs account: check they are configured the way this code expects.
 if (config.ELEVENLABS_API_KEY) {
   const check = await checkAgents(new ElevenLabsAgentsApi(config.ELEVENLABS_API_KEY), {
     helpAgentId: config.ELEVENLABS_HELP_AGENT_ID,
@@ -26,11 +26,11 @@ if (config.ELEVENLABS_API_KEY) {
   for (const problem of check.problems) log("error", "elevenlabs_agent_misconfigured", { problem });
   for (const detail of check.unreachable) log("warn", "elevenlabs_agents_unreachable", { detail });
   if (check.problems.length === 0 && check.unreachable.length === 0) log("info", "elevenlabs_agents_ok", { agents: Object.keys(check.agents) });
-  // En producción no se arranca con un agente mal configurado (corrígelo en el panel y vuelve a correr npm run agents:check).
+  // In production, never start with a misconfigured agent (fix it in the dashboard and rerun npm run agents:check).
   if (!config.IS_DEMO && check.problems.length > 0) process.exit(1);
 }
 
-// Timeout corto: el webhook de SMS hace como máximo dos llamadas y Twilio corta a los 15 s.
+// Short timeout: the SMS webhook makes at most two calls and Twilio gives up after 15 s.
 const client = new BackendClient({
   baseUrl: config.BACKEND_BASE_URL,
   advisorBaseUrl: config.ADVISOR_BASE_URL,
@@ -44,7 +44,7 @@ const sender = config.TWILIO_ACCOUNT_SID
       accountSid: config.TWILIO_ACCOUNT_SID,
       authToken: config.TWILIO_AUTH_TOKEN,
       from: config.TWILIO_PHONE_NUMBER,
-      // El webhook de estado llega en la fase 6; hasta entonces no se pide callback.
+      // The status webhook arrives in phase 6; until then no callback is requested.
       statusCallbackUrl: null,
     })
   : new StubSmsSender();
@@ -78,7 +78,7 @@ const dispatcher = new FollowupDispatcher({
   callResultTimeoutMs: config.FOLLOWUP_CALL_RESULT_TIMEOUT_MS,
   placementBackoffMs: config.FOLLOWUP_PLACEMENT_BACKOFF_MS,
 });
-// Las herramientas de voz esperan a una evaluación de hasta 5 s más el guardado: timeout más amplio que el del SMS.
+// The voice tools wait for an assessment of up to 5 s plus the save: a longer timeout than SMS.
 const voiceClient = new BackendClient({
   baseUrl: config.BACKEND_BASE_URL,
   advisorBaseUrl: config.ADVISOR_BASE_URL,
@@ -106,7 +106,7 @@ const server = createCommsServer({
   publicBaseUrl: config.PUBLIC_BASE_URL,
   twilioAuthToken: config.TWILIO_AUTH_TOKEN,
   twilioPhoneNumber: config.TWILIO_PHONE_NUMBER,
-  // Un SMS a cualquiera de nuestros números (p. ej. al que llamó al agricultor) entra a la misma conversación.
+  // An SMS to any of our numbers (e.g. the one that called the farmer) joins the same conversation.
   extraPhoneNumbers: [config.HELP_AGENT_TELEPHONE, config.FOLLOW_UP_AGENT_PHONE].filter((n): n is string => n !== null),
   conversation,
   voiceTools,
@@ -128,13 +128,13 @@ if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
 const sweeper = setInterval(() => {
   void conversation.sweep();
   void voiceTools.sweep();
-  // Llamadas sin `submit_followup` en el plazo → `no_response`, también con el sondeo apagado.
+  // Calls without `submit_followup` in time → `no_response`, even with polling turned off.
   void dispatcher.sweep();
 }, 60_000);
 sweeper.unref();
 
 if (config.DEMO_IGNORE_ALLOWED_HOURS) {
-  log("warn", "demo_ignore_allowed_hours", { message: "Demo: se contacta fuera del horario permitido (08:00–19:00). No usar con agricultores reales." });
+  log("warn", "demo_ignore_allowed_hours", { message: "Demo: contacting outside allowed hours (08:00–19:00). Do not use with real farmers." });
 }
 
 server.listen(config.COMMS_PORT, "127.0.0.1", () => {

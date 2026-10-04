@@ -1,13 +1,13 @@
 /**
- * Utilidades para webhooks de Twilio, adaptadas de Marco (`server.js`):
- * validación de firma, URL pública de callback y respuestas TwiML.
+ * Twilio webhook utilities, adapted from Marco (`server.js`):
+ * signature validation, public callback URL and TwiML replies.
  */
 import twilio from "twilio";
 
 /**
- * Twilio firma con la URL pública exacta que tiene configurada. Detrás de
- * ngrok o un proxy la petición llega como localhost, así que se reconstruye
- * con PUBLIC_BASE_URL + ruta (incluida la query string, si la hay).
+ * Twilio signs with the exact public URL it has configured. Behind ngrok or
+ * a proxy the request arrives as localhost, so it is rebuilt from
+ * PUBLIC_BASE_URL + path (including the query string, if any).
  */
 export function callbackUrl(publicBaseUrl: string, requestUrl: string): string {
   return new URL(requestUrl, publicBaseUrl).toString();
@@ -23,7 +23,7 @@ export function isValidTwilioSignature(
   return twilio.validateRequest(authToken, signature, url, params);
 }
 
-/** Cuerpo form-encoded de Twilio → objeto plano (Twilio no repite claves en SMS). */
+/** Twilio form-encoded body → plain object (Twilio doesn't repeat keys in SMS). */
 export function formParams(raw: string): Record<string, string> {
   return Object.fromEntries(new URLSearchParams(raw));
 }
@@ -37,7 +37,7 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/** `<Response><Message>…</Message></Response>`, o `<Response/>` si no hay que contestar. */
+/** `<Response><Message>…</Message></Response>`, or `<Response/>` when there's nothing to reply. */
 export function messageTwiml(text: string | null): string {
   const body = text ? `\n  <Message>${escapeXml(text)}</Message>\n` : "";
   return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>${body}</Response>`;

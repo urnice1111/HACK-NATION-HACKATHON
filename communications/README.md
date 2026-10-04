@@ -1,120 +1,123 @@
-# communications (Integrante 1)
+# communications (Member 1)
 
-Adaptadores Twilio/ElevenLabs, sesiones, entrega y seguimiento del MVP agrícola. Fuente de la verdad: [`INSTRUCTIONS.md`](../INSTRUCTIONS.md) (raíz del repo); guía del agente en [`CLAUDE.md`](CLAUDE.md).
+Twilio/ElevenLabs adapters, sessions, delivery and follow-up for the agriculture MVP. Source of truth: [`INSTRUCTIONS.md`](../INSTRUCTIONS.md) (repo root); agent guide in [`CLAUDE.md`](CLAUDE.md).
 
-## Puesta en marcha
+## Getting started
 
 ```bash
 npm install
-cp .env.example .env   # rellena MOCK_SERVICE_TOKEN y BACKEND_SERVICE_TOKEN con el mismo valor aleatorio
-npm run mock:backend   # mock de /v1 en http://127.0.0.1:8787
-npm run dev            # servidor de webhooks en http://127.0.0.1:8080
-npm test               # pruebas de contrato, webhook SMS y seguimiento contra el mock
+cp .env.example .env   # set MOCK_SERVICE_TOKEN and BACKEND_SERVICE_TOKEN to the same random value
+npm run mock:backend   # /v1 mock at http://127.0.0.1:8787
+npm run dev            # webhook server at http://127.0.0.1:8080
+npm test               # contract, SMS webhook and follow-up tests against the mock
 npm run typecheck
 ```
 
-## Probar con SMS reales
+## Testing with real SMS
 
-1. Terminal 1: `npm run mock:backend`. Con `MOCK_PHONE_OVERRIDES` en `.env` asocias tu celular a un agricultor demo; si no, se te trata como número desconocido.
+1. Terminal 1: `npm run mock:backend`. With `MOCK_PHONE_OVERRIDES` in `.env` you map your cell to a demo farmer; otherwise you're treated as an unknown number.
 2. Terminal 2: `npm run dev`.
 3. Terminal 3: `ngrok http 8080 --url=<PUBLIC_BASE_URL>`.
-4. En Twilio: Phone Numbers → Active numbers → tu número → *Messaging configuration* → "A message comes in": Webhook, `<PUBLIC_BASE_URL>/v1/webhooks/twilio/sms`, HTTP POST (o en su Messaging Service). No toques la configuración de voz: la gestiona ElevenLabs.
-5. Envía un SMS desde tu celular.
+4. In Twilio: Phone Numbers → Active numbers → your number → *Messaging configuration* → "A message comes in": Webhook, `<PUBLIC_BASE_URL>/v1/webhooks/twilio/sms`, HTTP POST (or in its Messaging Service). Don't touch the voice configuration: ElevenLabs manages it.
+5. Send an SMS from your cell.
 
-## Conversación SMS
+## SMS conversation
 
-Identidad (el número no basta) → parcela si hay varias → consentimiento → descripción → preguntas a partir de las `information_needs` del asesor → orientación → reporte.
+Identity (the number isn't enough) → plot if there are several → consent → description → questions based on the advisor's `information_needs` → guidance → report.
 
-- El asesor no escribe la pregunta: `src/sms/messages.ts` la formula con una plantilla por `need_code`, una por turno y empezando por la de mayor `priority`. Respuestas normalizadas por `answer_type` (`{need_code, value, unit, raw_text, unknown}`); "no sé" → `value: null, unknown: true`, nunca cero. Se envía `asked_need_codes` en cada evaluación; como máximo 3 rondas y 5 preguntas.
-- Se responde con TwiML en el mismo webhook, con como máximo dos llamadas bloqueantes al backend por SMS (`SMS_STEP_TIMEOUT_MS` cada una).
-- Una conversación produce un reporte con `Idempotency-Key: report-sms-<MessageSid del primer SMS>`: un webhook repetido no duplica nada aunque el proceso se reinicie. Solo se dice "quedó registrado" tras un 201; si el guardado queda ambiguo, se avisa y se reintenta con la misma clave (máximo 3 intentos).
-- Una conversación abandonada (`SMS_SESSION_IDLE_MS`) se guarda como `completeness: "partial"` si había consentimiento.
+- The advisor doesn't write the question: `src/sms/messages.ts` phrases it from a template per `need_code`, one per turn, starting with the highest `priority`. Answers are normalized by `answer_type` (`{need_code, value, unit, raw_text, unknown}`); "I don't know" → `value: null, unknown: true`, never zero. `asked_need_codes` is sent with every assessment; at most 3 rounds and 5 questions.
+- Replies go out as TwiML in the same webhook, with at most two blocking backend calls per SMS (`SMS_STEP_TIMEOUT_MS` each).
+- One conversation produces one report with `Idempotency-Key: report-sms-<MessageSid of the first SMS>`: a repeated webhook never duplicates anything, even if the process restarts. "It's been recorded" is only said after a 201; if the save is ambiguous, the farmer is told and it's retried with the same key (at most 3 attempts).
+- An abandoned conversation (`SMS_SESSION_IDLE_MS`) is saved as `completeness: "partial"` if there was consent.
+- Yes/no questions ask for **Y or N** (also accepts yes, no, 1, 0…). The copy avoids "reply YES" because Twilio treats YES as an opt-in keyword and may answer on its own.
 
-**Consentimiento** (tres permisos, sección 17). `contact-resolution` devuelve los guardados (`null` = nunca se preguntó):
+**Consent** (three permissions, section 17). `contact-resolution` returns the stored ones (`null` = never asked):
 
-- Reportes: si nunca lo dio, se pide el permiso; si ya lo dio, solo se confirma este reporte. Si dice NO, no se guarda nada.
-- Avisos y seguimientos: solo se preguntan a un agricultor confirmado que nunca respondió.
-- Se guardan con `POST /v1/consents` en segundo plano, con reintentos. Un número desconocido solo responde el permiso de reportes, válido para esa conversación.
+- Reports: if never given, the permission is requested; if already given, only this report is confirmed. If they say N, nothing is saved.
+- Alerts and follow-ups: only asked of a confirmed farmer who never answered.
+- Saved with `POST /v1/consents` in the background, with retries. An unknown number only answers the report permission, valid for that conversation.
 
-**Baja.** "BAJA" revoca avisos y llamadas de seguimiento (`POST /v1/consents/revocations`) y se contesta solo tras un 200; si queda pendiente, se dice que se está procesando. No revoca el permiso de reportar. STOP y similares hacen lo mismo en el backend, pero no contestamos: Twilio contesta y bloquea el número. Una conversación en curso se cierra guardando lo recibido como parcial.
+**Opt-out.** "ALERTS OFF" revokes alerts and follow-up calls (`POST /v1/consents/revocations`) and is answered only after a 200; if it's pending, we say it's being processed. It doesn't revoke the permission to report. STOP and similar keywords do the same in the backend, but we don't reply: Twilio replies and blocks the number. An ongoing conversation is closed, saving what was received as partial.
 
-**Seguimiento por SMS.** Respaldo tras 3 llamadas sin respuesta; lo inicia el despachador con `FollowupSmsFlow.start(item)`. Exige permiso de seguimiento, horario permitido (08:00–19:00 hora local) y, en demo, `DEMO_ALLOWED_NUMBERS`; no pisa una conversación abierta. Registra el intento `contacting` **antes** de enviar. Pregunta, una por SMS, cómo sigue la parcela (1 peor, 2 igual, 3 mejor, 4 ya se resolvió), qué hizo y si funcionó, y lo guarda con `POST /v1/followups/{id}/responses`. Sin respuesta en `FOLLOWUP_SMS_REPLY_WINDOW_MS` (24 h) registra `no_response`: nunca se declara resolución por silencio. Un envío ambiguo no se reenvía. Sin `TWILIO_ACCOUNT_SID`, los SMS salientes usan un stub.
+**SMS follow-up.** Fallback after 3 unanswered calls; the dispatcher starts it with `FollowupSmsFlow.start(item)`. It requires follow-up permission, allowed hours (08:00–19:00 local time) and, in demo, `DEMO_ALLOWED_NUMBERS`; it never steps on an open conversation. It records the `contacting` attempt **before** sending. It asks, one per SMS, how the plot is doing (1 worse, 2 same, 3 better, 4 resolved), what they did and whether it worked, and saves it with `POST /v1/followups/{id}/responses`. With no reply within `FOLLOWUP_SMS_REPLY_WINDOW_MS` (24 h) it records `no_response`: silence never declares a resolution. An ambiguous send is never resent. Without `TWILIO_ACCOUNT_SID`, outbound SMS use a stub.
 
-Limitación: las sesiones viven en memoria. Si el proceso se reinicia, la conversación en curso vuelve a empezar. Persistirlas requiere una tabla del Integrante 3.
+Limitation: sessions live in memory. If the process restarts, the ongoing conversation starts over. Persisting them needs a table from Member 3.
 
-## Agentes de ElevenLabs
+## ElevenLabs agents
 
-Se crean y se ajustan en el panel de ElevenLabs; el código solo usa sus IDs (`ELEVENLABS_HELP_AGENT_ID`, `ELEVENLABS_FOLLOWUP_AGENT_ID`) y comprueba su configuración. Guía paso a paso y `.env` de producción: [`agents/README.md`](agents/README.md).
+They are created and tuned in the ElevenLabs dashboard; the code only uses their IDs (`ELEVENLABS_HELP_AGENT_ID`, `ELEVENLABS_FOLLOWUP_AGENT_ID`) and checks their configuration. Step-by-step guide and production `.env`: [`agents/README.md`](agents/README.md).
 
-## Agente de ayuda (llamadas entrantes)
+## Help agent (inbound calls)
 
-Quien llama al número de Twilio habla con el agente "Ayuda café" de ElevenLabs: identidad por caller ID y confirmación → parcela → permisos → descripción → preguntas del asesor → orientación → reporte. Las herramientas (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`, `assess_observation`, `submit_report`) guardan identidad, parcela y permisos en comunicaciones, así que el modelo no puede elegir otra parcela ni guardar sin permiso. Detalle y configuración en [`agents/README.md`](agents/README.md).
+Whoever calls the Twilio number talks to the ElevenLabs help agent: identity by caller ID and confirmation → plot → permissions → description → advisor questions → guidance → report. The tools (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`, `assess_observation`, `submit_report`) keep identity, plot and permissions in communications, so the model can't pick another plot or save without permission. Details and configuration in [`agents/README.md`](agents/README.md).
 
-## Agente de seguimiento (llamadas salientes)
+## Follow-up agent (outbound calls)
 
-Flujo, variables dinámicas y configuración en ElevenLabs: [`agents/README.md`](agents/README.md).
+Flow, dynamic variables and ElevenLabs configuration: [`agents/README.md`](agents/README.md).
 
-- `followup.due` llega por `POST /v1/followups/{id}/dispatch` (token `COMMS_SERVICE_TOKEN`, deduplicado por `event_id`) o por sondeo cada `FOLLOWUP_POLL_INTERVAL_MS`.
-- Intentos 1–3: llamada con el agente de seguimiento; después, SMS; tras el SMS sin respuesta, no se insiste.
-- Las herramientas (`/v1/tools/*`) se autentican con `ELEVENLABS_TOOL_SECRET`; solo `registered: true` permite decir "quedó registrado".
-- Sin `submit_followup` en `FOLLOWUP_CALL_RESULT_TIMEOUT_MS` se registra `no_response`. Un fallo transitorio de ElevenLabs espera `FOLLOWUP_PLACEMENT_BACKOFF_MS` sin gastar intento; una respuesta ambigua no se repite. Sin credenciales, las llamadas usan un stub.
-- Para probar de noche: `DEMO_IGNORE_ALLOWED_HOURS=true` se salta el horario. Solo con `IS_DEMO=true` (si no, el servidor no arranca) y no se salta el consentimiento ni la lista blanca.
+- `followup.due` arrives via `POST /v1/followups/{id}/dispatch` (token `COMMS_SERVICE_TOKEN`, deduplicated by `event_id`) or by polling every `FOLLOWUP_POLL_INTERVAL_MS`.
+- Attempts 1–3: a call with the follow-up agent; then an SMS; if the SMS goes unanswered, no further contact.
+- The tools (`/v1/tools/*`) authenticate with `ELEVENLABS_TOOL_SECRET`; only `registered: true` allows saying "it's been recorded".
+- Without `submit_followup` within `FOLLOWUP_CALL_RESULT_TIMEOUT_MS`, `no_response` is recorded. A transient ElevenLabs failure waits `FOLLOWUP_PLACEMENT_BACKOFF_MS` without using up an attempt; an ambiguous response is never repeated. Without credentials, calls use a stub.
+- To test at night: `DEMO_IGNORE_ALLOWED_HOURS=true` skips the allowed hours. Only with `IS_DEMO=true` (otherwise the server won't start), and it never skips consent or the allowlist.
 
-Limitación: las llamadas en curso se recuerdan en memoria. Si el proceso se reinicia con una llamada sin resultado, el seguimiento queda en `contacting` hasta que el webhook post-call de ElevenLabs (fase 6) lo concilie.
+Limitation: in-progress calls are remembered in memory. If the process restarts with a call that has no result, the follow-up stays in `contacting` until the ElevenLabs post-call webhook (phase 6) reconciles it.
 
-## Estructura
+## Structure
 
-| Ruta | Contenido |
+| Path | Contents |
 | --- | --- |
-| `src/server/` | Servidor HTTP: webhook SMS, herramientas de voz (`/v1/tools/*`) y `followup.due` (`/v1/followups/{id}/dispatch`). `main.ts` arma las dependencias. |
-| `src/sms/` | Conversación SMS (`conversation.ts`), seguimiento por SMS (`followup.ts`), tipos de sesión (`session.ts`) y textos (`messages.ts`). |
-| `src/followups/dispatcher.ts` | Despachador de `followup.due`: permiso, horario y lista blanca; hasta 3 llamadas y luego SMS. |
-| `src/tools/voice-tools.ts` | Server tools de los agentes: ayuda (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`) y comunes (`assess_observation`, `submit_report`, `submit_followup`). |
-| `src/elevenlabs/agents.ts` | Lee los agentes de la cuenta de ElevenLabs y comprueba su configuración (al arrancar y con `npm run agents:check`); `npm run agents:pull` guarda la copia de referencia en `agents/`. |
-| `src/backend/` | Cliente de `/v1` que valida cada respuesta (`client.ts`) y escrituras con Idempotency-Key fija y reintentos acotados (`writer.ts`). |
-| `src/twilio/`, `src/elevenlabs/` | Firma y TwiML de Twilio, envío de SMS y llamada saliente, ambos con stub. |
-| `src/policy/outreach.ts` | Contacto proactivo: consentimiento, horario local y lista blanca de demo. |
-| `src/contracts/` | Copia provisional de los contratos v2 como esquemas zod. |
-| `src/http/`, `src/util.ts` | request_id, error uniforme, validación 422, logs con teléfonos enmascarados; mutex por clave y mapa con tope. |
-| `src/mock-backend/` | Mock de `/v1` (backend + asesor) con fixtures demo y estado en memoria. |
-| `agents/` | Prompts y herramientas de los agentes de ElevenLabs. |
+| `src/server/` | HTTP server: SMS webhook, voice tools (`/v1/tools/*`) and `followup.due` (`/v1/followups/{id}/dispatch`). `main.ts` wires up the dependencies. |
+| `src/sms/` | SMS conversation (`conversation.ts`), SMS follow-up (`followup.ts`), session types (`session.ts`) and copy (`messages.ts`). |
+| `src/followups/dispatcher.ts` | `followup.due` dispatcher: permission, hours and allowlist; up to 3 calls, then SMS. |
+| `src/tools/voice-tools.ts` | Server tools for the agents: help (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`) and shared (`assess_observation`, `submit_report`, `submit_followup`). |
+| `src/elevenlabs/agents.ts` | Reads the agents from the ElevenLabs account and checks their configuration (at startup and with `npm run agents:check`); `npm run agents:pull` saves the reference copy into `agents/`. |
+| `src/backend/` | `/v1` client that validates every response (`client.ts`) and writes with a fixed Idempotency-Key and bounded retries (`writer.ts`). |
+| `src/twilio/`, `src/elevenlabs/` | Twilio signature and TwiML, SMS sending and outbound calls, both with a stub. |
+| `src/policy/outreach.ts` | Proactive contact: consent, local hours and demo allowlist. |
+| `src/contracts/` | Provisional copy of the v2 contracts as zod schemas. |
+| `src/http/`, `src/util.ts` | request_id, uniform error, 422 validation, logs with masked phones; per-key mutex and capped map. |
+| `src/mock-backend/` | `/v1` mock (backend + advisor) with demo fixtures and in-memory state. |
+| `agents/` | Prompts and tools of the ElevenLabs agents. |
 
-## Mock de /v1
+## /v1 mock
 
-Rutas: `POST /v1/contact-resolution`, `GET /v1/plots/{id}/context` (cabecera `X-Session-Id`), `POST /v1/assessments`, `POST /v1/reports`, `GET /v1/reports/{id}`, `GET /v1/followups?status=…&due_before=…`, `POST /v1/followups/{id}/responses`, `GET /v1/health`. PROPUESTAS (no están en la v2): `POST /v1/followups/{id}/attempts`, `POST /v1/consents`, `POST /v1/consents/revocations`. Todas, salvo health, exigen `Authorization: Bearer <MOCK_SERVICE_TOKEN>` y solo aceptan `is_demo: true`.
+Routes: `POST /v1/contact-resolution`, `GET /v1/plots/{id}/context` (`X-Session-Id` header), `POST /v1/assessments`, `POST /v1/reports`, `GET /v1/reports/{id}`, `GET /v1/followups?status=…&due_before=…`, `POST /v1/followups/{id}/responses`, `GET /v1/health`. PROPOSED (not in v2): `POST /v1/followups/{id}/attempts`, `POST /v1/consents`, `POST /v1/consents/revocations`. All except health require `Authorization: Bearer <MOCK_SERVICE_TOKEN>` and only accept `is_demo: true`.
 
-El asesor mock imita la v2: primer turno con dos necesidades (`local_weather_perception`, `leaf_underside`), no repite `asked_need_codes`, "no sé" no cuenta como respuesta, deriva tras 5 preguntas o ante fungicida/dosis, declara en `data_used` lo consultado y en `advise` menciona primero un caso `verified`, nunca uno con producto y dosis. Un seguimiento `resolved` crea una sola resolución y cierra el caso; los demás programan otro a los 3 minutos.
+The mock advisor mimics v2: a first turn with two needs (`local_weather_perception`, `leaf_underside`), never repeats `asked_need_codes`, "I don't know" doesn't count as an answer, refers after 5 questions or on fungicide/dose questions, declares what it queried in `data_used`, and in `advise` mentions a `verified` case first, never one with a product and dose. A `resolved` follow-up creates a single resolution and closes the case; the others schedule another one 3 minutes later.
 
-Escenarios con la cabecera `X-Mock-Scenario`: `advisor_unavailable`, `backend_unavailable`, `delay:<ms>`.
+Scenarios with the `X-Mock-Scenario` header: `advisor_unavailable`, `backend_unavailable`, `delay:<ms>`.
 
-Fixtures (`src/mock-backend/fixtures.ts`, teléfonos ficticios +1 202 555 01xx; amenaza `coffee_leaf_rust`, protocolo `coffee-rust-demo-v1`):
+Fixtures (`src/mock-backend/fixtures.ts`, fictional phones +1 202 555 01xx; threat `coffee_leaf_rust`, protocol `coffee-rust-demo-v1`):
 
-| Teléfono | Caso de prueba |
+| Phone | Test case |
 | --- | --- |
-| `+12025550101` | Número conocido, una parcela, con resumen ambiental |
-| `+12025550102` | Teléfono compartido por dos agricultores |
-| `+12025550104` | Sin consentimiento de avisos ni seguimientos; parcela fuera de cobertura |
-| `+12025550105` | Caso activo con seguimiento **vencido** (`followup_demo_05`) |
-| `+12025550106` | Caso con seguimiento `no_response` tras 3 intentos |
-| `+12025550107`, `+12025550108` | Parcelas sin contexto (`crop: null`) y consentimiento nunca preguntado |
-| cualquier otro | Número desconocido (`no_match`) |
+| `+12025550101` | Known number, one plot, with environmental summary |
+| `+12025550102` | Phone shared by two farmers |
+| `+12025550104` | No alert or follow-up consent; plot out of coverage |
+| `+12025550105` | Active case with a **due** follow-up (`followup_demo_05`) |
+| `+12025550106` | Case with a `no_response` follow-up after 3 attempts |
+| `+12025550107`, `+12025550108` | Plots without context (`crop: null`) and consent never asked |
+| any other | Unknown number (`no_match`) |
 
-Casos resueltos: `resolution_demo_01` (`verified`), `resolution_demo_02` (`farmer_reported`) y `resolution_demo_03` (producto y dosis: el asesor lo omite).
+Resolved cases: `resolution_demo_01` (`verified`), `resolution_demo_02` (`farmer_reported`) and `resolution_demo_03` (product and dose: the advisor leaves it out).
 
-## Backend real (Integrante 3)
+## Real backend (Member 3)
 
-`backend/` y `contracts/` ya implementan las formas que propuso comunicaciones (marcadas ACORDADO en `src/contracts/resources.ts`): `contact-resolution` en dos pasos, `consents`, `consents/revocations`, `plots/{id}/context`, `reports`, `reports/{id}`, `GET /v1/followups`, `…/attempts` y `…/responses`. `test/contracts-compat.test.ts` lo comprueba contra `contracts/schemas/*.json`. Además, cada reporte con caso programa un seguimiento a los 3 min (demo).
+`backend/` and `contracts/` already implement the shapes communications proposed (marked AGREED in `src/contracts/resources.ts`): two-step `contact-resolution`, `consents`, `consents/revocations`, `plots/{id}/context`, `reports`, `reports/{id}`, `GET /v1/followups`, `…/attempts` and `…/responses`. `test/contracts-compat.test.ts` checks it against `contracts/schemas/*.json`. Also, every report with a case schedules a follow-up 3 minutes later (demo).
 
-Para usarlo: `BACKEND_BASE_URL=http://<host>:8000` (con o sin `/v1`) y `BACKEND_SERVICE_TOKEN` vacío. Diferencias que comunicaciones ya absorbe:
+To use it: `BACKEND_BASE_URL=http://<host>:8000` (with or without `/v1`) and an empty `BACKEND_SERVICE_TOKEN`. Differences communications already absorbs:
 
-- El asesor es otro servicio (`advisor/`): `ADVISOR_BASE_URL`. Si no está corriendo, sirve el asesor del mock (`ADVISOR_BASE_URL=http://127.0.0.1:8787` con `npm run mock:backend` abierto; solo conoce las parcelas `plot_demo_*`). Sus errores llegan como `{"detail": …}`.
-- El `candidate_token` dura 15 min: SMS y voz vuelven a preguntar con quién hablan.
-- Un permiso nunca preguntado pasa a `false` en cuanto se guarda otro (solo `consent_at: null` significa "nunca").
-- El backend aún no entrega `followup.due`: hay que sondear (`FOLLOWUP_POLL_INTERVAL_MS` > 0) o disparar el curl de `/v1/followups/{id}/dispatch`.
+- The advisor is a separate service (`advisor/`): `ADVISOR_BASE_URL`. If it isn't running, use the mock's advisor (`ADVISOR_BASE_URL=http://127.0.0.1:8787` with `npm run mock:backend` running; it only knows the `plot_demo_*` plots). Its errors arrive as `{"detail": …}`.
+- The `candidate_token` lasts 15 min: SMS and voice ask again who they're speaking with.
+- A permission never asked becomes `false` as soon as another one is saved (only `consent_at: null` means "never").
+- The backend doesn't deliver `followup.due` yet: you need polling (`FOLLOWUP_POLL_INTERVAL_MS` > 0) or the `/v1/followups/{id}/dispatch` curl.
+- Language: communications is in English, but the backend and the advisor still produce Spanish text (seed data, need catalog, recommendations). Until they are translated, the voice agents are told to convey guidance in English, but SMS show the advisor's options and recommendations as they arrive.
 
-## Pendiente de acordar con el Integrante 3
+## Still to agree with Member 3
 
-1. **Cómo llega `followup.due`** (PROPUESTO): `POST /v1/followups/{id}/dispatch` (cuerpo = evento outbox, 202 con el resultado), además del sondeo. Falta que el worker lo llame.
-2. **`guidance_given`** sale de la tabla `assessments`, pero el asesor (`advisor/`) no guarda ahí sus evaluaciones: en casos nuevos llega `null` y el agente de seguimiento dice "ninguna".
-3. **Token de servicio:** la sección 17 pide Bearer por consumidor (`comms`); el backend aún no autentica, así que cualquiera en la red ve teléfonos en `GET /v1/followups`.
-4. **SMS de seguimiento como `Notification`:** hoy se envía directo y se registra como intento (`channel: sms`); si se prefiere la cola de notificaciones, pasa a `/v1/notifications/{id}/dispatch` (fase 6), que también necesita leer la notificación en cola y reportar su estado.
+1. **How `followup.due` arrives** (PROPOSED): `POST /v1/followups/{id}/dispatch` (body = outbox event, 202 with the result), in addition to polling. The worker still needs to call it.
+2. **`guidance_given`** comes from the `assessments` table, but the advisor (`advisor/`) doesn't store its assessments there: for new cases it arrives as `null` and the follow-up agent says "none".
+3. **Service token:** section 17 asks for a Bearer per consumer (`comms`); the backend doesn't authenticate yet, so anyone on the network can see phone numbers in `GET /v1/followups`.
+4. **Follow-up SMS as a `Notification`:** today it's sent directly and recorded as an attempt (`channel: sms`); if the notification queue is preferred, it moves to `/v1/notifications/{id}/dispatch` (phase 6), which also needs to read the queued notification and report its status.
+5. **Language:** `preferred_language` defaults to `'es'` in the backend, and the seeds, `contracts/need_catalog.json`, the advisor prompt and its recommendations are in Spanish.
