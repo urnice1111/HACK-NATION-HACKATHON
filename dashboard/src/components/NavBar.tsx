@@ -68,7 +68,7 @@ export function NavBar() {
           <p className="truncate text-sm font-medium">{user?.name}</p>
           <p className="text-xs text-ink-muted">{user ? ROLE_LABEL[user.role] : ''}</p>
         </div>
-        {can('reset_demo') && (
+        {can('reset_demo') && API_MODE === 'mock' && (
           <button
             onClick={onReset}
             disabled={reset.isPending}

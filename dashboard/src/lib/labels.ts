@@ -17,6 +17,7 @@ export const DELIVERY: Record<NotificationStatus, { label: string; tone: Tone }>
   delivered: { label: 'Entregado (no implica leído)', tone: 'accent' },
   failed: { label: 'Falló el envío', tone: 'high' },
   unknown: { label: 'Estado incierto, por conciliar', tone: 'medium' },
+  cancelled: { label: 'Envío cancelado', tone: 'neutral' },
 }
 
 export const FOLLOWUP_STATUS: Record<FollowUpStatus, string> = {

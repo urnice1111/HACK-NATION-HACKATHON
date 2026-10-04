@@ -1,10 +1,12 @@
 """Run: uvicorn backend.app.main:app --reload"""
 
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.db import pool
 from backend.app.errors import ApiError, install_error_handlers
@@ -22,6 +24,15 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Agro voice MVP backend", version="0.1.0", lifespan=lifespan)
 install_error_handlers(app)
+
+# Dashboard en el navegador (Vite dev en :5173). En despliegue, CORS_ORIGINS con la URL pública separada por comas.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173").split(","),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID", "X-Operator-Id"],
+    expose_headers=["X-Request-ID"],
+)
 
 
 @app.middleware("http")

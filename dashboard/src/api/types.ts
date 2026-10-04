@@ -62,7 +62,7 @@ export interface Page<T> {
 }
 
 export type AlertStatus = 'pending_review' | 'approved' | 'rejected' | 'cancelled' | 'queued'
-export type NotificationStatus = 'queued' | 'sending' | 'accepted' | 'delivered' | 'failed' | 'unknown'
+export type NotificationStatus = 'queued' | 'sending' | 'accepted' | 'delivered' | 'failed' | 'unknown' | 'cancelled'
 
 export interface Alert {
   id: string
