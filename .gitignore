@@ -1,7 +1,26 @@
+# .gitignore compartido por todos los módulos (backend, contracts, communications, ...)
+
+# macOS
+.DS_Store
+
+# Python
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+
+# Node
+node_modules/
+
+# Secretos: nunca subir credenciales (sección 12).
+# La excepción va después de `.env.*` para que las plantillas sí se versionen.
 .env
 .env.*
+!.env.example
+
+# Logs y salidas locales
+*.log
+npm-debug.log*
+coverage/
+dist/

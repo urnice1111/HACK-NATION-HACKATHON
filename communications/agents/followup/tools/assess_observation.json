@@ -1,0 +1,39 @@
+{
+  "type": "webhook",
+  "name": "assess_observation",
+  "description": "Envía lo que el agricultor ve ahora en sus plantas y sus respuestas; devuelve qué falta preguntar (information_needs) u orientación. Usar solo si la parcela empeoró.",
+  "response_timeout_secs": 15,
+  "api_schema": {
+    "url": "https://TU-DOMINIO-PUBLICO/v1/tools/assess-observation",
+    "method": "POST",
+    "request_headers": {
+      "Authorization": { "secret_id": "ID_DEL_SECRETO_CON_Bearer_ELEVENLABS_TOOL_SECRET" }
+    },
+    "request_body_schema": {
+      "type": "object",
+      "required": ["session_id", "plot_id", "user_statement"],
+      "properties": {
+        "session_id": { "type": "string", "dynamic_variable": "session_id", "description": "ID de la sesión" },
+        "plot_id": { "type": "string", "dynamic_variable": "plot_id", "description": "ID de la parcela" },
+        "user_statement": { "type": "string", "description": "Lo que el agricultor describe ahora, con sus palabras" },
+        "symptoms": { "type": "array", "items": { "type": "string" }, "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'" },
+        "answers": {
+          "type": "array",
+          "description": "Todas las respuestas a necesidades de esta llamada",
+          "items": {
+            "type": "object",
+            "required": ["need_code", "raw_text", "unknown"],
+            "properties": {
+              "need_code": { "type": "string", "description": "need_code de la necesidad respondida" },
+              "value": { "type": "string", "description": "Respuesta normalizada según answer_type (texto, número o true/false). Omitir si no sabe" },
+              "unit": { "type": "string", "description": "Unidad si la respuesta es un número, por ejemplo 'd' para días" },
+              "raw_text": { "type": "string", "description": "Lo que dijo el agricultor, tal cual" },
+              "unknown": { "type": "boolean", "description": "true si el agricultor no sabe" }
+            }
+          }
+        },
+        "asked_need_codes": { "type": "array", "items": { "type": "string" }, "description": "need_code de todo lo ya preguntado en esta llamada" }
+      }
+    }
+  }
+}
