@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "submit_report",
-  "description": "Saves the report the farmer confirmed, when the assessment ends or if it can't be assessed.",
+  "description": "Guarda el reporte que el agricultor confirmó, al terminar la evaluación o si no se puede evaluar.",
   "response_timeout_secs": 10,
   "api_schema": {
     "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/submit-report",
@@ -25,19 +25,19 @@
         },
         "user_statement": {
           "type": "string",
-          "description": "Summary of what the farmer said, in their own words"
+          "description": "Resumen de lo que el agricultor contó, con sus palabras"
         },
         "symptoms": {
           "type": "array",
-          "description": "Concrete symptoms they mentioned, for example 'yellow spots on leaves'",
+          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'",
           "items": {
             "type": "string",
-            "description": "One concrete symptom, for example 'yellow spots on leaves'"
+            "description": "Un síntoma concreto, por ejemplo 'manchas amarillas en hojas'"
           }
         },
         "completeness": {
           "type": "string",
-          "description": "sufficient if the assessment ended with guidance; partial otherwise",
+          "description": "sufficient si la evaluación terminó con orientación; partial en otro caso",
           "enum": [
             "partial",
             "sufficient"
@@ -45,7 +45,7 @@
         },
         "assessment_id": {
           "type": "string",
-          "description": "assessment_id from the last assess_observation response, if any"
+          "description": "assessment_id de la última respuesta de assess_observation, si hubo"
         }
       }
     }

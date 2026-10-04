@@ -13,6 +13,7 @@
     },
     "request_body_schema": {
       "type": "object",
+      "description": "Acknowledgement of the alert call.",
       "required": [
         "session_id",
         "notification_id",

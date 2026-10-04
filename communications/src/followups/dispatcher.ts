@@ -63,6 +63,8 @@ export interface DispatcherDeps {
 interface PendingCall {
   followup_id: string;
   session_id: string;
+  /** ElevenLabs conversation, to match the post-call webhook. */
+  conversation_id: string | null;
   placed_at: number;
 }
 
@@ -142,7 +144,18 @@ export class FollowupDispatcher {
   /** Calls placed without `submit_followup` within the deadline → `no_response`. */
   async sweep(): Promise<void> {
     const now = this.now().getTime();
-    const expired = [...this.pending.values()].filter((p) => now - p.placed_at > this.deps.callResultTimeoutMs);
+    await this.expire([...this.pending.values()].filter((p) => now - p.placed_at > this.deps.callResultTimeoutMs));
+  }
+
+  /** ElevenLabs' post-call webhook: a follow-up call that ended without `submit_followup` is `no_response` now. */
+  async callEnded(conversationId: string): Promise<boolean> {
+    const call = [...this.pending.values()].find((p) => p.conversation_id === conversationId);
+    if (!call) return false;
+    await this.expire([call]);
+    return true;
+  }
+
+  private async expire(expired: PendingCall[]): Promise<void> {
     if (expired.length === 0) return;
 
     const contacting = await this.deps.client.listFollowups("contacting");
@@ -211,7 +224,12 @@ export class FollowupDispatcher {
     const reference = placed.ok ? (placed.conversation_id ?? placed.call_sid) : null;
     const attempt = await this.recordAttempt(item.followup_id, sessionId, "contacting", reference);
     if (attempt.status === "failed") log("error", "followup_call_attempt_not_recorded", { ...fields, correlation_id: sessionId, code: attempt.code });
-    this.pending.set(item.followup_id, { followup_id: item.followup_id, session_id: sessionId, placed_at: this.now().getTime() });
+    this.pending.set(item.followup_id, {
+      followup_id: item.followup_id,
+      session_id: sessionId,
+      conversation_id: placed.ok ? placed.conversation_id : null,
+      placed_at: this.now().getTime(),
+    });
 
     if (!placed.ok) return this.done({ status: "call_ambiguous", session_id: sessionId }, { ...fields, correlation_id: sessionId, code: placed.code });
     return this.done(

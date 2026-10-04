@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "record_consent",
-  "description": "Saves the permissions the farmer gave in this call. Call it once, with what was asked.",
+  "description": "Guarda los permisos que dio el agricultor en esta llamada. Llamar una vez, con lo que se le preguntó.",
   "response_timeout_secs": 10,
   "api_schema": {
     "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/record-consent",
@@ -23,15 +23,15 @@
         },
         "reports": {
           "type": "boolean",
-          "description": "true if they allow saving their report; false if not. Omit if not asked"
+          "description": "true si permite guardar su reporte; false si no. Omitir si no se preguntó"
         },
         "notifications": {
           "type": "boolean",
-          "description": "true if they want text alerts; false if not. Omit if not asked"
+          "description": "true si quiere recibir avisos por mensaje; false si no. Omitir si no se preguntó"
         },
         "followup_calls": {
           "type": "boolean",
-          "description": "true if they accept follow-up calls; false if not. Omit if not asked"
+          "description": "true si acepta llamadas de seguimiento; false si no. Omitir si no se preguntó"
         }
       }
     }

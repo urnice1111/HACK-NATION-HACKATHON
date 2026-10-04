@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "assess_observation",
-  "description": "Sends what the farmer sees on their plants now and their answers; returns what is still to be asked (information_needs) or guidance. Use only if the plot got worse.",
+  "description": "Envía lo que el agricultor ve ahora en sus plantas y sus respuestas; devuelve qué falta preguntar (information_needs) u orientación. Usar solo si la parcela empeoró.",
   "response_timeout_secs": 15,
   "api_schema": {
     "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/assess-observation",
@@ -29,19 +29,19 @@
         },
         "user_statement": {
           "type": "string",
-          "description": "What the farmer describes now, in their own words"
+          "description": "Lo que el agricultor describe ahora, con sus palabras"
         },
         "symptoms": {
           "type": "array",
-          "description": "Concrete symptoms they mentioned, for example 'yellow spots on leaves'",
+          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'",
           "items": {
             "type": "string",
-            "description": "One concrete symptom, for example 'yellow spots on leaves'"
+            "description": "Un síntoma concreto, por ejemplo 'manchas amarillas en hojas'"
           }
         },
         "answers": {
           "type": "array",
-          "description": "All the answers to needs in this call",
+          "description": "Todas las respuestas a necesidades de esta llamada",
           "items": {
             "type": "object",
             "required": [
@@ -52,33 +52,33 @@
             "properties": {
               "need_code": {
                 "type": "string",
-                "description": "need_code of the answered need"
+                "description": "need_code de la necesidad respondida"
               },
               "value": {
                 "type": "string",
-                "description": "Answer normalized by answer_type (text, number or true/false). Omit if they don't know"
+                "description": "Respuesta normalizada según answer_type (texto, número o true/false). Omitir si no sabe"
               },
               "unit": {
                 "type": "string",
-                "description": "Unit if the answer is a number, for example 'd' for days"
+                "description": "Unidad si la respuesta es un número, por ejemplo 'd' para días"
               },
               "raw_text": {
                 "type": "string",
-                "description": "What the farmer said, word for word"
+                "description": "Lo que dijo el agricultor, tal cual"
               },
               "unknown": {
                 "type": "boolean",
-                "description": "true if the farmer doesn't know"
+                "description": "true si el agricultor no sabe"
               }
             }
           }
         },
         "asked_need_codes": {
           "type": "array",
-          "description": "need_code of everything already asked in this call",
+          "description": "need_code de todo lo ya preguntado en esta llamada",
           "items": {
             "type": "string",
-            "description": "need_code already asked"
+            "description": "need_code ya preguntado"
           }
         }
       }

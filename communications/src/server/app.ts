@@ -12,6 +12,7 @@ import { log, maskPhone } from "../http/log.ts";
 import { HttpError, bearerMatches, headerValue, readBody, readJson, requestIdFrom, sendJson } from "../http/respond.ts";
 import type { ToolReply, VoiceTools } from "../tools/voice-tools.ts";
 import { normalizeE164 } from "../phone.ts";
+import { PostCallEvent, isValidElevenLabsSignature } from "../elevenlabs/webhook.ts";
 import type { SmsConversation } from "../sms/conversation.ts";
 import { BoundedMap, KeyedMutex } from "../util.ts";
 import { callbackUrl, formParams, isValidTwilioSignature, messageTwiml } from "../twilio/webhook.ts";
@@ -29,6 +30,8 @@ export interface CommsServerDeps {
   /** Follow-up dispatcher; without it (or without the token) the `followup.due` route answers 503. */
   dispatcher?: FollowupDispatcher;
   serviceToken?: string | null;
+  /** ElevenLabs post-call webhook HMAC secret; without it that route answers 503. */
+  elevenlabsWebhookSecret?: string | null;
 }
 
 const FollowupDueEvent = OutboxEvent.extend({
@@ -95,6 +98,45 @@ export function createCommsServer(deps: CommsServerDeps): Server {
     res.end(twiml);
   }
 
+  /** Post-call events already handled (ElevenLabs may retry the same one). */
+  const endedCalls = new BoundedMap<string, true>();
+
+  /**
+   * ElevenLabs post-call webhook: answers 200 at once and then closes the call in communications
+   * (saves an unsubmitted help report, or records a follow-up without answer). Nothing slow before the 200.
+   */
+  async function elevenlabsPostCall(req: IncomingMessage, res: ServerResponse, requestId: string): Promise<string> {
+    if (!deps.elevenlabsWebhookSecret) throw new HttpError(503, "NOT_CONFIGURED", "ElevenLabs webhook secret is not configured");
+    const raw = await readBody(req);
+    if (!isValidElevenLabsSignature(deps.elevenlabsWebhookSecret, headerValue(req, "elevenlabs-signature"), raw)) {
+      throw new HttpError(401, "INVALID_SIGNATURE", "Invalid ElevenLabs signature");
+    }
+    let parsed: ReturnType<typeof PostCallEvent.safeParse>;
+    try {
+      parsed = PostCallEvent.safeParse(JSON.parse(raw));
+    } catch {
+      throw new HttpError(400, "INVALID_JSON", "The body is not valid JSON");
+    }
+    if (!parsed.success) {
+      throw new HttpError(422, "VALIDATION_ERROR", "Expected an ElevenLabs post-call event", { details: [{ field: "data.conversation_id", reason: "required" }] });
+    }
+    const conversationId = parsed.data.data.conversation_id;
+    const key = `${parsed.data.type}:${conversationId}`;
+    const replayed = endedCalls.has(key);
+    sendJson(res, 200, { received: true, replayed }, { "X-Request-Id": requestId });
+    if (replayed) return "replayed";
+    endedCalls.set(key, true);
+
+    // post_call_audio carries no new information for us; transcription and initiation failure do.
+    if (parsed.data.type === "post_call_audio") return "ignored";
+    const [help, followup] = await Promise.all([
+      deps.voiceTools?.callEnded(conversationId) ?? Promise.resolve("nothing_to_save"),
+      deps.dispatcher?.callEnded(conversationId) ?? Promise.resolve(false),
+    ]);
+    log("info", "elevenlabs_call_ended", { request_id: requestId, correlation_id: conversationId, event: parsed.data.type, help_report: help, followup_closed: followup });
+    return "handled";
+  }
+
   async function twilioSms(req: IncomingMessage, res: ServerResponse, requestId: string): Promise<string> {
     const params = formParams(await readBody(req));
     const url = callbackUrl(deps.publicBaseUrl, req.url ?? "/");
@@ -144,6 +186,8 @@ export function createCommsServer(deps: CommsServerDeps): Server {
     try {
       if (method === "GET" && path === "/v1/health") {
         sendJson(res, 200, { status: "ok" }, { "X-Request-Id": requestId });
+      } else if (method === "POST" && path === "/v1/webhooks/elevenlabs/post-call") {
+        outcome = await elevenlabsPostCall(req, res, requestId);
       } else if (method === "POST" && path === "/v1/webhooks/twilio/sms") {
         outcome = await twilioSms(req, res, requestId);
       } else if (method === "POST" && path in TOOL_ROUTES) {

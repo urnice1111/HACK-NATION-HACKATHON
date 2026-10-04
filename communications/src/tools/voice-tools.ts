@@ -183,6 +183,8 @@ interface ToolSession {
   /** Only in help calls (started by `resolve_farmer`). */
   help: HelpState | null;
   last_activity_at: number;
+  /** Last advisor disposition: "advise" means the evaluation finished. */
+  last_disposition: string | null;
 }
 
 function parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
@@ -522,7 +524,8 @@ export class VoiceTools {
       schema_version: SCHEMA_VERSION,
       session_id: input.session_id,
       plot_id: plotId,
-      language: help?.farmer?.language ?? this.deps.defaultLanguage,
+      // The conversation runs in the agent's language; the farmer's stored preference may differ.
+      language: this.deps.defaultLanguage,
       observation: {
         observed_at: null,
         symptoms: input.symptoms,
@@ -545,6 +548,7 @@ export class VoiceTools {
       });
     }
     session.last_assessment_id = assessed.data.assessment_id;
+    session.last_disposition = assessed.data.disposition;
     return ok(forAgent(assessed.data, MAX_QUESTIONS - asked.size));
   }
 
@@ -581,19 +585,35 @@ export class VoiceTools {
   async sweep(): Promise<void> {
     const now = this.now().getTime();
     for (const [sessionId, session] of [...this.sessions]) {
-      const help = session.help;
-      if (!help || session.reports > 0 || !help.statement || now - session.last_activity_at <= this.idleMs) continue;
-      if (!reportAllowed(help)) continue;
-      const outcome = await this.saveReport(sessionId, session, {
-        plot_id: session.plot?.plot_id ?? null,
-        provider_reference: sessionId,
-        user_statement: help.statement,
-        symptoms: help.symptoms,
-        completeness: "partial",
-        assessment_id: session.last_assessment_id,
-      });
-      log("info", "help_call_saved_partial", { correlation_id: sessionId, outcome: outcome.status });
+      if (now - session.last_activity_at > this.idleMs) await this.saveUnsubmitted(sessionId, session, "partial");
     }
+  }
+
+  /**
+   * ElevenLabs' post-call webhook: the call is over. A help call that ended without `submit_report`
+   * (the model said goodbye first, or the line dropped) is saved now with what was evaluated, instead
+   * of waiting for the idle sweep. Only with permission and a description; never twice.
+   */
+  async callEnded(conversationId: string): Promise<"saved" | "pending" | "failed" | "nothing_to_save"> {
+    const session = this.sessions.get(conversationId);
+    if (!session) return "nothing_to_save";
+    const completeness = session.last_disposition === "advise" ? "sufficient" : "partial";
+    return (await this.saveUnsubmitted(conversationId, session, completeness)) ?? "nothing_to_save";
+  }
+
+  private async saveUnsubmitted(sessionId: string, session: ToolSession, completeness: "partial" | "sufficient") {
+    const help = session.help;
+    if (!help || session.reports > 0 || !help.statement || !reportAllowed(help)) return null;
+    const outcome = await this.saveReport(sessionId, session, {
+      plot_id: session.plot?.plot_id ?? null,
+      provider_reference: sessionId,
+      user_statement: help.statement,
+      symptoms: help.symptoms,
+      completeness,
+      assessment_id: session.last_assessment_id,
+    });
+    log("info", "help_call_saved_without_submit", { correlation_id: sessionId, outcome: outcome.status, completeness });
+    return outcome.status;
   }
 
   private saveReport(
@@ -628,7 +648,7 @@ export class VoiceTools {
   private session(id: string): ToolSession {
     let session = this.sessions.get(id);
     if (!session) {
-      session = { assessments: 0, last_assessment_id: null, plot: null, reports: 0, help: null, last_activity_at: 0 };
+      session = { assessments: 0, last_assessment_id: null, plot: null, reports: 0, help: null, last_activity_at: 0, last_disposition: null };
       this.sessions.set(id, session);
     }
     session.last_activity_at = this.now().getTime();

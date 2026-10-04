@@ -65,6 +65,14 @@ describe("configuration", () => {
     assert.throws(() => loadConfig({ ...base, ALERT_CALL_ATTEMPTS: "9" }), /ALERT_CALL_ATTEMPTS/);
   });
 
+  it("deployed: listens on PORT and on all interfaces when told so", () => {
+    const local = loadConfig(base);
+    assert.deepEqual([local.COMMS_PORT, local.COMMS_HOST], [8080, "127.0.0.1"]);
+    const deployed = loadConfig({ ...base, PORT: "10000", COMMS_HOST: "0.0.0.0" });
+    assert.deepEqual([deployed.COMMS_PORT, deployed.COMMS_HOST], [10000, "0.0.0.0"]);
+    assert.equal(loadConfig({ ...base, PORT: "10000", COMMS_PORT: "8081" }).COMMS_PORT, 8081, "COMMS_PORT wins");
+  });
+
   it("DEMO_IGNORE_ALLOWED_HOURS with IS_DEMO=false prevents startup", () => {
     assert.throws(() => loadConfig({ ...base, IS_DEMO: "false", DEMO_IGNORE_ALLOWED_HOURS: "true" }), /DEMO_IGNORE_ALLOWED_HOURS: only allowed with IS_DEMO=true/);
   });

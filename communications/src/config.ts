@@ -22,7 +22,10 @@ const PRODUCTION_REQUIRED = [
 
 const Env = z
   .object({
+    /** Falls back to PORT, which hosting platforms (Render, Railway…) assign. */
     COMMS_PORT: z.coerce.number().int().positive().default(8080),
+    /** 127.0.0.1 locally (ngrok in front); 0.0.0.0 when deployed. */
+    COMMS_HOST: z.string().min(1).default("127.0.0.1"),
     /** Exact public domain (no path or trailing "/"). Twilio signs with it. */
     PUBLIC_BASE_URL: Url.refine((u) => new URL(u).pathname === "/" && !u.endsWith("/"), "origin only, no path or trailing /"),
     TWILIO_AUTH_TOKEN: z.string().min(1),
@@ -78,6 +81,8 @@ const Env = z
     ELEVENLABS_TOOL_SECRET: Secret,
     /** Token the backend worker uses to deliver `followup.due` (PROPOSED). Without it, that route answers 503. */
     COMMS_SERVICE_TOKEN: Secret,
+    /** HMAC secret of ElevenLabs' post-call webhook (/v1/webhooks/elevenlabs/post-call). Without it, that route answers 503. */
+    ELEVENLABS_WEBHOOK_SECRET: Secret,
     /** Polling for due follow-ups as a fallback for the event; 0 turns it off. */
     FOLLOWUP_POLL_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
     /** Call attempts before the fallback SMS (section 17). */
@@ -119,7 +124,7 @@ export type Config = z.infer<typeof Env>;
 
 /** Validates the environment at startup. The error message names variables, never values. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = Env.safeParse(env);
+  const parsed = Env.safeParse({ ...env, COMMS_PORT: env.COMMS_PORT || env.PORT });
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid configuration:\n${problems}`);

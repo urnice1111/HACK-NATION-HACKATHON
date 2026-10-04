@@ -138,6 +138,7 @@ const server = createCommsServer({
   toolSecret: config.ELEVENLABS_TOOL_SECRET,
   dispatcher,
   serviceToken: config.COMMS_SERVICE_TOKEN,
+  elevenlabsWebhookSecret: config.ELEVENLABS_WEBHOOK_SECRET,
 });
 
 if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
@@ -172,9 +173,9 @@ if (config.DEMO_IGNORE_ALLOWED_HOURS) {
   log("warn", "demo_ignore_allowed_hours", { message: "Demo: contacting outside allowed hours (08:00–19:00). Do not use with real farmers." });
 }
 
-server.listen(config.COMMS_PORT, "127.0.0.1", () => {
+server.listen(config.COMMS_PORT, config.COMMS_HOST, () => {
   log("info", "comms_listening", {
-    local_url: `http://127.0.0.1:${config.COMMS_PORT}`,
+    local_url: `http://${config.COMMS_HOST}:${config.COMMS_PORT}`,
     sms_webhook: `${config.PUBLIC_BASE_URL}/v1/webhooks/twilio/sms`,
     backend: config.BACKEND_BASE_URL,
     advisor: config.ADVISOR_BASE_URL ?? config.BACKEND_BASE_URL,

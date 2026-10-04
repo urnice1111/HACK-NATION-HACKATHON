@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "get_plot_context",
-  "description": "Sets the plot the confirmed farmer is talking about and fetches its context. Use only after confirm_farmer.",
+  "description": "Fija la parcela de la que habla el agricultor confirmado y trae su contexto. Usar solo después de confirm_farmer.",
   "response_timeout_secs": 10,
   "api_schema": {
     "url": "https://YOUR-PUBLIC-DOMAIN/v1/tools/get-plot-context",
@@ -23,7 +23,7 @@
         },
         "plot_number": {
           "type": "integer",
-          "description": "Number of the plot in confirm_farmer's list. Omit if they only have one"
+          "description": "Número de la parcela en la lista de confirm_farmer. Omitir si solo tiene una"
         }
       }
     }

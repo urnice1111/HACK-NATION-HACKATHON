@@ -352,7 +352,8 @@ export class SmsConversation {
       schema_version: SCHEMA_VERSION,
       session_id: session.session_id,
       plot_id: session.plot.plot_id,
-      language: session.farmer?.language ?? this.deps.defaultLanguage,
+      // SMS copy is in the service language; the farmer's stored preference may differ.
+      language: this.deps.defaultLanguage,
       observation: {
         observed_at: null,
         symptoms: [],
