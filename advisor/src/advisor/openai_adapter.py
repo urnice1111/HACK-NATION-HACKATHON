@@ -1,103 +1,91 @@
-"""Orquestador OpenAI: Function Calling interno y Structured Outputs final."""
+"""OpenAI adapter: Function Calling to plan the internal queries, Structured Outputs to decide."""
 
 from __future__ import annotations
 
 import json
 import os
-import time
-from uuid import uuid4
 
-from openai import APIError, OpenAI
+from openai import OpenAI, OpenAIError
 from pydantic import ValidationError
 
-from .catalog import NEED_CATALOG, PROTOCOL_VERSION
-from .contracts import AssessmentDraft, AssessmentRequest, AssessmentResponse
-from .prompt import build_system_prompt
-from .tools import AdvisorToolGateway, TOOL_DEFINITIONS
+# Re-exported: the backend bridge and tests import them from here.
+from .assessment import (  # noqa: F401
+    AssessmentGenerationError,
+    ModelDraft,
+    NeedChoice,
+    TwoStepAssessor,
+    build_response,
+    default_queries,
+    log,
+)
+from .prompt import build_planner_prompt, build_system_prompt
+from .tools import MAX_INTERNAL_QUERIES, TOOL_DEFINITIONS, AdvisorToolGateway
 
 MODEL_SNAPSHOT = "gpt-4.1-mini-2025-04-14"
-MAX_INTERNAL_QUERIES = 3
+PLANNER_TIMEOUT_SECONDS = 2.5
+DECISION_TIMEOUT_SECONDS = 4.0
+PLANNER_MAX_OUTPUT_TOKENS = 300
+DECISION_MAX_OUTPUT_TOKENS = 350
 
 
-class AssessmentGenerationError(RuntimeError):
-    """El endpoint degrada de forma segura; nunca devuelve consejo inventado."""
-
-
-class OpenAIAssessor:
+class OpenAIAssessor(TwoStepAssessor):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = MODEL_SNAPSHOT,
+        model: str | None = None,
         gateway: AdvisorToolGateway | None = None,
+        planner: str | None = None,
     ) -> None:
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self._model = model
-        self._gateway = gateway or AdvisorToolGateway.from_environment()
+        super().__init__(model or os.getenv("ADVISOR_MODEL", MODEL_SNAPSHOT), gateway,
+                         planner or os.getenv("ADVISOR_PLANNER", "model"))
+        self._api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
 
-    def assess(self, request: AssessmentRequest) -> AssessmentResponse:
+    def _require_credentials(self) -> None:
         if not self._api_key:
-            raise AssessmentGenerationError("OPENAI_API_KEY no está configurada en el servidor")
+            raise AssessmentGenerationError("OPENAI_API_KEY is not configured on the server")
 
-        client = OpenAI(api_key=self._api_key, timeout=5.0)
-        started_at = time.monotonic()
-        transcript: list[object] = [
-            {"role": "system", "content": build_system_prompt()},
-            {"role": "user", "content": json.dumps(request.model_dump(mode="json"), ensure_ascii=False)},
-        ]
+    @property
+    def _client(self) -> OpenAI:
+        return OpenAI(api_key=self._api_key, max_retries=0)
 
-        for _ in range(MAX_INTERNAL_QUERIES):
-            if time.monotonic() - started_at >= 5.0:
-                transcript.append({"role": "developer", "content": "Se agotó el tiempo. Finaliza declarando contexto insuficiente."})
-                break
-            try:
-                response = client.responses.create(model=self._model, input=transcript, tools=TOOL_DEFINITIONS)
-            except APIError as exc:
-                raise AssessmentGenerationError("OpenAI no está disponible temporalmente") from exc
-            calls = [item for item in response.output if item.type == "function_call"]
-            if not calls:
-                break
-            transcript.extend(response.output)
-            # Una por vuelta: el límite de tres consultas es verificable y trazable.
-            call = calls[0]
-            output = self._gateway.execute(call.name, call.arguments, plot_id=request.plot_id, started_at=started_at)
-            transcript.append({"type": "function_call_output", "call_id": call.call_id, "output": output})
-        else:
-            transcript.append({"role": "developer", "content": "Ya se alcanzó el límite de consultas. Finaliza con los datos disponibles."})
-
+    def _plan_calls(self, turn_input: dict) -> list[tuple[str, str]] | None:
         try:
-            final = client.responses.parse(model=self._model, input=transcript, text_format=AssessmentDraft)
-            draft = final.output_parsed
-            if draft is None:
-                raise AssessmentGenerationError("OpenAI no produjo una salida estructurada utilizable")
-            draft = AssessmentDraft.model_validate(draft)
+            planned = self._client.responses.create(
+                model=self._model,
+                instructions=build_planner_prompt(),
+                input=json.dumps(turn_input, ensure_ascii=False),
+                tools=TOOL_DEFINITIONS,
+                tool_choice="required",
+                parallel_tool_calls=True,
+                temperature=0,
+                max_output_tokens=PLANNER_MAX_OUTPUT_TOKENS,
+                store=False,
+                timeout=PLANNER_TIMEOUT_SECONDS,
+            )
+        except OpenAIError as exc:
+            # Planning is an optimization: the default queries still consult before asking.
+            log.warning("planner failed (%s); using default queries", type(exc).__name__)
+            return None
+        calls = [(item.name, item.arguments) for item in planned.output if item.type == "function_call"]
+        return calls[:MAX_INTERNAL_QUERIES] or None
+
+    def _decide(self, language: str, payload: dict) -> ModelDraft:
+        try:
+            final = self._client.responses.parse(
+                model=self._model,
+                instructions=build_system_prompt(language),
+                input=json.dumps(payload, ensure_ascii=False),
+                text_format=ModelDraft,
+                temperature=0,
+                max_output_tokens=DECISION_MAX_OUTPUT_TOKENS,
+                store=False,
+                timeout=DECISION_TIMEOUT_SECONDS,
+            )
+        except OpenAIError as exc:
+            raise AssessmentGenerationError("The language model is temporarily unavailable") from exc
+        if final.output_parsed is None:
+            raise AssessmentGenerationError("The language model did not produce a usable structured output")
+        try:
+            return ModelDraft.model_validate(final.output_parsed)
         except ValidationError as exc:
-            raise AssessmentGenerationError("La salida estructurada no superó la validación") from exc
-        except APIError as exc:
-            raise AssessmentGenerationError("OpenAI no está disponible temporalmente") from exc
-
-        self._validate_domain_rules(draft, request)
-        # El modelo decide qué falta y el orden; el texto que verá voz siempre es canónico.
-        draft.information_needs = [NEED_CATALOG[need.need_code] for need in draft.information_needs]
-        return AssessmentResponse(
-            **draft.model_dump(),
-            assessment_id=f"assessment_{uuid4().hex}",
-            model_version=self._model,
-            protocol_version=PROTOCOL_VERSION,
-        )
-
-    @staticmethod
-    def _validate_domain_rules(draft: AssessmentDraft, request: AssessmentRequest) -> None:
-        requested_codes = [need.need_code for need in draft.information_needs]
-        unknown_codes = set(requested_codes) - set(NEED_CATALOG)
-        repeated_codes = {code for code in requested_codes if requested_codes.count(code) > 1}
-        if unknown_codes or repeated_codes:
-            raise AssessmentGenerationError("El modelo propuso necesidades fuera del catálogo o repetidas")
-        if set(requested_codes) & set(request.asked_need_codes):
-            raise AssessmentGenerationError("El modelo volvió a pedir una necesidad ya respondida")
-        if draft.disposition.value == "ask_more" and not draft.information_needs:
-            raise AssessmentGenerationError("ask_more requiere al menos una necesidad")
-        if draft.disposition.value != "ask_more" and draft.information_needs:
-            raise AssessmentGenerationError("advise o refer no deben incluir nuevas necesidades")
-        for recommendation in draft.recommendations:
-            if recommendation.protocol_id != PROTOCOL_VERSION:
-                raise AssessmentGenerationError("La recomendación no pertenece al protocolo aprobado")
+            raise AssessmentGenerationError("The structured output failed validation") from exc

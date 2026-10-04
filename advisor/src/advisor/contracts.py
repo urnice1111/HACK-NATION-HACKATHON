@@ -67,10 +67,10 @@ class Observation(BaseModel):
 
     observed_at: str | None = None
     symptoms: list[str] = Field(default_factory=list)
-    user_statement: str
+    user_statement: str | None = None
     measurements: list[dict[str, Any]] = Field(default_factory=list)
     answers: list[ObservationAnswer] = Field(default_factory=list)
-    completeness: str
+    completeness: str = "partial"
 
 
 class AssessmentRequest(BaseModel):
@@ -82,7 +82,8 @@ class AssessmentRequest(BaseModel):
     language: str = "es"
     observation: Observation
     asked_need_codes: list[str] = Field(default_factory=list)
-    plot_context: dict[str, Any] = Field(default_factory=dict)
+    # The shared contract allows null (PlotContextLite | None).
+    plot_context: dict[str, Any] | None = Field(default_factory=dict)
     is_demo: bool = True
 
 
