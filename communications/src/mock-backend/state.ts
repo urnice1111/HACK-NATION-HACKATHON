@@ -112,7 +112,7 @@ export class MockState {
 
   /**
    * Llamada saliente de seguimiento: no hay contact-resolution, así que el
-   * intento `contacting` liga la sesión a la parcela del caso (PROPUESTO).
+   * intento `contacting` liga la sesión a la parcela del caso (solo el mock lo exige).
    */
   grantFollowupSession(sessionId: string, farmerId: string, plotId: string): void {
     const grant = this.sessionGrants.get(sessionId);

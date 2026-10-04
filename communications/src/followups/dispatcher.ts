@@ -66,8 +66,20 @@ interface PendingCall {
   placed_at: number;
 }
 
+/** Variables que recibe el agente de seguimiento; su prompt y herramientas no pueden usar otras (las comprueba `agents:check`). */
+export const FOLLOWUP_DYNAMIC_VARIABLES = [
+  "farmer_name",
+  "threat_label",
+  "symptoms",
+  "guidance_given",
+  "followup_id",
+  "plot_id",
+  "session_id",
+  "attempt_number",
+] as const;
+
 /** Variables dinámicas del agente de seguimiento. Sin teléfono ni coordenadas: el modelo las ve. */
-export function followupVariables(item: FollowupListItem, sessionId: string): DynamicVariables {
+export function followupVariables(item: FollowupListItem, sessionId: string): DynamicVariables & Record<(typeof FOLLOWUP_DYNAMIC_VARIABLES)[number], string | number> {
   return {
     farmer_name: item.case_summary.farmer_name,
     threat_label: THREAT_LABELS[item.case_summary.threat_code] ?? "el problema que reportó",
@@ -94,6 +106,8 @@ export class FollowupDispatcher {
 
   /** `followup.due` para un ID: busca el seguimiento abierto y lo despacha. */
   async dispatchById(followupId: string): Promise<DispatchResult> {
+    // Sin sondeo, el evento es lo único que vence las llamadas sin resultado: si no, una llamada vieja bloquea para siempre.
+    await this.sweep();
     for (const status of ["scheduled", "no_response", "contacting"] as const) {
       const list = await this.deps.client.listFollowups(status);
       if (!list.ok) return { status: "failed", reason: "backend_error", code: list.code };

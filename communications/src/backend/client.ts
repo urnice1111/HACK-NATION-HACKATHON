@@ -122,7 +122,7 @@ export class BackendClient {
     });
   }
 
-  /** PROPUESTO: seguimientos con resumen del caso y contacto (solo token `comms`). */
+  /** Seguimientos con resumen del caso y contacto (solo token `comms`). */
   listFollowups(status: FollowupStatus, filters: { dueBefore?: string } = {}, opts: CallOptions = {}) {
     const query = new URLSearchParams({ status });
     if (filters.dueBefore) query.set("due_before", filters.dueBefore);
@@ -130,7 +130,7 @@ export class BackendClient {
   }
 
   /**
-   * PROPUESTO: registra un intento de contacto; `contacting` liga la sesión a la parcela del caso.
+   * Registra un intento de contacto; `contacting` liga la sesión a la parcela del caso.
    * Un intento por sesión y estado: repetir el callback del proveedor no cuenta otro intento.
    */
   recordFollowupAttempt(
@@ -146,7 +146,7 @@ export class BackendClient {
     });
   }
 
-  /** PROPUESTO: guarda los tres permisos de la sección 17; una escritura por sesión. */
+  /** Guarda los tres permisos de la sección 17; una escritura por sesión. */
   recordConsent(body: ConsentRequest, idempotencyKey = `consent-${body.session_id}`, opts: CallOptions = {}) {
     return this.call("POST", "/v1/consents", ConsentRecorded, {
       body,
@@ -155,7 +155,7 @@ export class BackendClient {
     });
   }
 
-  /** PROPUESTO: "BAJA" por SMS. */
+  /** "BAJA" por SMS. */
   revokeConsent(body: ConsentRevocationRequest, idempotencyKey: string, opts: CallOptions = {}) {
     return this.call("POST", "/v1/consents/revocations", ConsentRevoked, {
       body,

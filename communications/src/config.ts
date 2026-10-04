@@ -10,6 +10,15 @@ const Ms = (fallback: number) => z.coerce.number().int().positive().default(fall
 /** "a, b,c" → ["a", "b", "c"]. */
 const List = (fallback = "") => z.string().default(fallback).transform((v) => v.split(",").map((n) => n.trim()).filter(Boolean));
 
+const PRODUCTION_REQUIRED = [
+  "TWILIO_ACCOUNT_SID",
+  "ELEVENLABS_API_KEY",
+  "ELEVENLABS_HELP_AGENT_ID",
+  "ELEVENLABS_FOLLOWUP_AGENT_ID",
+  "ELEVENLABS_TOOL_SECRET",
+  "COMMS_SERVICE_TOKEN",
+] as const;
+
 const Env = z
   .object({
     COMMS_PORT: z.coerce.number().int().positive().default(8080),
@@ -41,12 +50,20 @@ const Env = z
     FOLLOWUP_SMS_REPLY_WINDOW_MS: Ms(24 * 60 * 60 * 1000),
     /** Lista blanca de demo (E.164 separados por comas): en demo solo se contacta a estos números. Vacía = a nadie. */
     DEMO_ALLOWED_NUMBERS: List().pipe(z.array(PhoneE164)).transform((list) => new Set(list)),
-    // --- Agente de seguimiento (llamadas salientes de ElevenLabs vía Twilio) ---
-    /** Sin los tres valores, las llamadas salientes usan el stub (no se llama a nadie). */
+    // --- Agentes de ElevenLabs: se crean en el panel y aquí solo se referencian (ver agents/README.md) ---
+    /** Sin la clave, el ID del agente de seguimiento y el del número, las llamadas salientes usan el stub. */
     ELEVENLABS_API_KEY: Optional,
+    /** Agente de ayuda (llamadas entrantes). Solo se usa para comprobar su configuración al arrancar. */
+    ELEVENLABS_HELP_AGENT_ID: Optional,
     ELEVENLABS_FOLLOWUP_AGENT_ID: Optional,
-    /** ID del número Twilio importado en ElevenLabs (Phone Numbers), no el número E.164. */
+    /** Un solo número para ambos agentes: su ID en ElevenLabs (Phone Numbers), no el E.164. Con dos números, usa los de abajo. */
     ELEVENLABS_AGENT_PHONE_NUMBER_ID: Optional,
+    /** Número que contesta las llamadas entrantes (agente de ayuda): E.164 y su ID en ElevenLabs. */
+    HELP_AGENT_TELEPHONE: PhoneE164.optional().or(z.literal("")).transform((v) => v || null),
+    HELP_AGENT_TELEPHONE_ID: Optional,
+    /** Número desde el que llama el agente de seguimiento: E.164 y su ID en ElevenLabs. */
+    FOLLOW_UP_AGENT_PHONE: PhoneE164.optional().or(z.literal("")).transform((v) => v || null),
+    FOLLOW_UP_AGENT_PHONE_ID: Optional,
     /** Secreto que ElevenLabs envía como `Authorization: Bearer …` a /v1/tools/*. Sin él, esas rutas responden 503. */
     ELEVENLABS_TOOL_SECRET: Secret,
     /** Token con el que el worker del backend entrega `followup.due` (PROPUESTO). Sin él, esa ruta responde 503. */
@@ -65,6 +82,21 @@ const Env = z
   .refine((env) => env.IS_DEMO || !env.DEMO_IGNORE_ALLOWED_HOURS, {
     path: ["DEMO_IGNORE_ALLOWED_HOURS"],
     message: "solo se permite con IS_DEMO=true",
+  })
+  .superRefine((env, ctx) => {
+    // Producción: nada de stubs ni rutas sin credenciales; todo lo que llama o escribe debe estar configurado.
+    if (env.IS_DEMO) return;
+    for (const key of PRODUCTION_REQUIRED) {
+      if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "obligatorio con IS_DEMO=false" });
+    }
+    for (const key of ["HELP_AGENT_TELEPHONE_ID", "FOLLOW_UP_AGENT_PHONE_ID"] as const) {
+      if (!env[key] && !env.ELEVENLABS_AGENT_PHONE_NUMBER_ID) {
+        ctx.addIssue({ code: "custom", path: [key], message: "obligatorio con IS_DEMO=false (o ELEVENLABS_AGENT_PHONE_NUMBER_ID si es un solo número)" });
+      }
+    }
+    if (!env.PUBLIC_BASE_URL.startsWith("https://")) {
+      ctx.addIssue({ code: "custom", path: ["PUBLIC_BASE_URL"], message: "debe ser https con IS_DEMO=false" });
+    }
   });
 
 export type Config = z.infer<typeof Env>;

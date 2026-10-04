@@ -28,11 +28,11 @@
         },
         "symptoms": {
           "type": "array",
+          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'",
           "items": {
             "type": "string",
             "description": "Un síntoma concreto, por ejemplo 'manchas amarillas en hojas'"
-          },
-          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'"
+          }
         },
         "answers": {
           "type": "array",
@@ -70,11 +70,11 @@
         },
         "asked_need_codes": {
           "type": "array",
+          "description": "need_code de todo lo ya preguntado en esta llamada",
           "items": {
             "type": "string",
             "description": "need_code ya preguntado"
-          },
-          "description": "need_code de todo lo ya preguntado en esta llamada"
+          }
         }
       }
     }

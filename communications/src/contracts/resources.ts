@@ -1,9 +1,9 @@
 /**
  * Cuerpos de solicitud/respuesta de los contratos HTTP v2 (sección 10).
  *
- * Lo marcado como PROPUESTO no está definido en el documento: es la forma que
- * comunicaciones necesita y debe acordarse con el Integrante 3 antes de
- * integrarse. Lo demás reproduce los ejemplos 10.1, 10.4 y 10.5.
+ * Lo marcado como ACORDADO no está en el documento: lo propuso comunicaciones y el
+ * backend ya lo implementa igual (`contracts/models.py`); `test/contracts-compat.test.ts`
+ * lo comprueba. Lo demás reproduce los ejemplos 10.1, 10.4 y 10.5.
  */
 import { z } from "zod";
 import {
@@ -131,7 +131,7 @@ export const AssessmentResponse = z.strictObject({
 export const ReportRequest = z.strictObject({
   schema_version: SchemaVersion,
   session_id: OpaqueId,
-  /** PROPUESTO: null para el "registro mínimo" de un número desconocido; nunca una parcela al azar. */
+  /** ACORDADO: null para el "registro mínimo" de un número desconocido; nunca una parcela al azar. */
   plot_id: OpaqueId.nullable(),
   case_id: OpaqueId.nullable(),
   channel: Channel,
@@ -156,7 +156,7 @@ export const ReportCreated = z.strictObject({
 
 // --- GET /v1/reports/{report_id} ---
 
-/** PROPUESTO: el documento solo dice "caso, evaluación y estado de procesamiento". */
+/** ACORDADO: el documento solo dice "caso, evaluación y estado de procesamiento". */
 export const ReportDetail = z.strictObject({
   report_id: OpaqueId,
   case_id: OpaqueId.nullable(),
@@ -179,7 +179,7 @@ export const ReportDetail = z.strictObject({
 // --- POST /v1/contact-resolution ---
 
 /**
- * PROPUESTO. Los tres permisos de la sección 17, por separado. `null` = nunca
+ * ACORDADO. Los tres permisos de la sección 17, por separado. `null` = nunca
  * se preguntó (hay que pedirlo); `false` = lo negó o lo revocó.
  */
 export const ContactConsent = z.strictObject({
@@ -190,7 +190,7 @@ export const ContactConsent = z.strictObject({
 });
 
 /**
- * PROPUESTO. Dos pasos en la misma ruta:
+ * ACORDADO. Dos pasos en la misma ruta:
  *  1. Sin `confirm_candidate_token`: devuelve candidatos con token opaco y etiqueta mínima.
  *  2. Con el token que el usuario confirmó: habilita los datos de ese agricultor para la sesión.
  * El caller ID por sí solo nunca es prueba de identidad.
@@ -232,7 +232,7 @@ export const ContactResolutionResponse = z.strictObject({
 // --- GET /v1/plots/{plot_id}/context ---
 
 /**
- * PROPUESTO: forma del resumen ambiental (`env.plot_summary`, Integrante 4)
+ * ACORDADO: forma del resumen ambiental (`env.plot_summary`, Integrante 4)
  * dentro del contexto. Cada característica lleva unidad explícita (sección 8);
  * `value: null` = sin dato o fuera de cobertura.
  */
@@ -249,7 +249,7 @@ export const EnvironmentSummary = z.strictObject({
   dataset_ids: z.array(z.string().min(1)),
 });
 
-/** PROPUESTO: contexto mínimo para el asesor y la conversación; sin coordenadas ni datos de contacto. */
+/** ACORDADO: contexto mínimo para el asesor y la conversación; sin coordenadas ni datos de contacto. */
 export const PlotContext = z.strictObject({
   schema_version: SchemaVersion,
   plot_id: OpaqueId,
@@ -283,7 +283,7 @@ export const PlotContext = z.strictObject({
 // --- GET /v1/followups?status=… ---
 
 /**
- * PROPUESTO: el documento dice "seguimientos con resumen del caso". Comunicaciones
+ * ACORDADO: el documento dice "seguimientos con resumen del caso". Comunicaciones
  * necesita además el contacto para marcar y comprobar consentimiento/horario;
  * `contact` solo debería devolverse al token de servicio `comms`.
  */
@@ -327,7 +327,7 @@ export const FollowupList = z.strictObject({
 // --- POST /v1/followups/{id}/attempts ---
 
 /**
- * PROPUESTO: la v2 solo define `responses`. Comunicaciones necesita registrar
+ * ACORDADO: la v2 solo define `responses`. Comunicaciones necesita registrar
  * cada intento (`contacting`, `no_response`, `failed`). `contacting` liga la
  * sesión (conversation_id de ElevenLabs o sesión SMS) a la parcela del caso,
  * porque en una llamada saliente no hay `contact-resolution`.
@@ -376,7 +376,7 @@ export const FollowupResponseCreated = z.strictObject({
 // --- POST /v1/consents ---
 
 /**
- * PROPUESTO: la v2 exige guardar tres permisos con `consent_at`, pero no define
+ * ACORDADO: la v2 exige guardar tres permisos con `consent_at`, pero no define
  * dónde. Cada permiso `null` = no se preguntó en esta sesión (se conserva el anterior).
  */
 export const ConsentRequest = z.strictObject({
@@ -401,7 +401,7 @@ export const ConsentRecorded = z.strictObject({
 
 const RevocableScope = z.enum(["notifications", "followup_calls"]);
 
-/** PROPUESTO: "BAJA" por SMS revoca avisos y seguimientos de todos los contactos con ese teléfono. */
+/** ACORDADO: "BAJA" por SMS revoca avisos y seguimientos de todos los contactos con ese teléfono. */
 export const ConsentRevocationRequest = z.strictObject({
   schema_version: SchemaVersion,
   phone_e164: PhoneE164,

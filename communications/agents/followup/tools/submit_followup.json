@@ -35,14 +35,14 @@
         },
         "status_reported": {
           "type": "string",
+          "description": "Cómo sigue la parcela: worse (peor), same (igual), improved (mejor), resolved (ya se resolvió), unknown (no sabe)",
           "enum": [
             "worse",
             "same",
             "improved",
             "resolved",
             "unknown"
-          ],
-          "description": "Cómo sigue la parcela: worse (peor), same (igual), improved (mejor), resolved (ya se resolvió), unknown (no sabe)"
+          ]
         },
         "user_statement": {
           "type": "string",
@@ -54,13 +54,13 @@
         },
         "action_worked": {
           "type": "string",
+          "description": "Si le funcionó lo que hizo: yes, no, partial (en parte) o unknown (no sabe)",
           "enum": [
             "yes",
             "no",
             "partial",
             "unknown"
-          ],
-          "description": "Si le funcionó lo que hizo: yes, no, partial (en parte) o unknown (no sabe)"
+          ]
         },
         "change_noticed_days_ago": {
           "type": "integer",

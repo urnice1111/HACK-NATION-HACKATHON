@@ -1,6 +1,7 @@
 import { BackendClient } from "../backend/client.ts";
 import { BackendWriter } from "../backend/writer.ts";
 import { loadConfig } from "../config.ts";
+import { checkAgents, ElevenLabsAgentsApi, phonesFromEnv } from "../elevenlabs/agents.ts";
 import { ElevenLabsOutboundCaller, StubOutboundCaller } from "../elevenlabs/outbound.ts";
 import { FollowupDispatcher } from "../followups/dispatcher.ts";
 import { VoiceTools } from "../tools/voice-tools.ts";
@@ -12,6 +13,22 @@ import { StubSmsSender, TwilioSmsSender } from "../twilio/sender.ts";
 import { createCommsServer } from "./app.ts";
 
 const config = loadConfig();
+const phones = phonesFromEnv((name) => config[name as keyof typeof config] as string | null);
+
+// Los agentes viven en la cuenta de ElevenLabs: se comprueba que estén configurados como espera este código.
+if (config.ELEVENLABS_API_KEY) {
+  const check = await checkAgents(new ElevenLabsAgentsApi(config.ELEVENLABS_API_KEY), {
+    helpAgentId: config.ELEVENLABS_HELP_AGENT_ID,
+    followupAgentId: config.ELEVENLABS_FOLLOWUP_AGENT_ID,
+    phones,
+    publicBaseUrl: config.PUBLIC_BASE_URL,
+  });
+  for (const problem of check.problems) log("error", "elevenlabs_agent_misconfigured", { problem });
+  for (const detail of check.unreachable) log("warn", "elevenlabs_agents_unreachable", { detail });
+  if (check.problems.length === 0 && check.unreachable.length === 0) log("info", "elevenlabs_agents_ok", { agents: Object.keys(check.agents) });
+  // En producción no se arranca con un agente mal configurado (corrígelo en el panel y vuelve a correr npm run agents:check).
+  if (!config.IS_DEMO && check.problems.length > 0) process.exit(1);
+}
 
 // Timeout corto: el webhook de SMS hace como máximo dos llamadas y Twilio corta a los 15 s.
 const client = new BackendClient({
@@ -42,11 +59,11 @@ const followups = new FollowupSmsFlow({
   replyWindowMs: config.FOLLOWUP_SMS_REPLY_WINDOW_MS,
 });
 const caller =
-  config.ELEVENLABS_API_KEY && config.ELEVENLABS_FOLLOWUP_AGENT_ID && config.ELEVENLABS_AGENT_PHONE_NUMBER_ID
+  config.ELEVENLABS_API_KEY && config.ELEVENLABS_FOLLOWUP_AGENT_ID && phones.followup.id
     ? new ElevenLabsOutboundCaller({
         apiKey: config.ELEVENLABS_API_KEY,
         agentId: config.ELEVENLABS_FOLLOWUP_AGENT_ID,
-        agentPhoneNumberId: config.ELEVENLABS_AGENT_PHONE_NUMBER_ID,
+        agentPhoneNumberId: phones.followup.id,
       })
     : new StubOutboundCaller();
 const dispatcher = new FollowupDispatcher({
@@ -89,6 +106,8 @@ const server = createCommsServer({
   publicBaseUrl: config.PUBLIC_BASE_URL,
   twilioAuthToken: config.TWILIO_AUTH_TOKEN,
   twilioPhoneNumber: config.TWILIO_PHONE_NUMBER,
+  // Un SMS a cualquiera de nuestros números (p. ej. al que llamó al agricultor) entra a la misma conversación.
+  extraPhoneNumbers: [config.HELP_AGENT_TELEPHONE, config.FOLLOW_UP_AGENT_PHONE].filter((n): n is string => n !== null),
   conversation,
   voiceTools,
   toolSecret: config.ELEVENLABS_TOOL_SECRET,
@@ -109,6 +128,8 @@ if (config.FOLLOWUP_POLL_INTERVAL_MS > 0) {
 const sweeper = setInterval(() => {
   void conversation.sweep();
   void voiceTools.sweep();
+  // Llamadas sin `submit_followup` en el plazo → `no_response`, también con el sondeo apagado.
+  void dispatcher.sweep();
 }, 60_000);
 sweeper.unref();
 

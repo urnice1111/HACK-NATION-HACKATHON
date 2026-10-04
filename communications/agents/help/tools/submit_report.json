@@ -29,19 +29,19 @@
         },
         "symptoms": {
           "type": "array",
+          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'",
           "items": {
             "type": "string",
             "description": "Un síntoma concreto, por ejemplo 'manchas amarillas en hojas'"
-          },
-          "description": "Síntomas concretos que mencionó, por ejemplo 'manchas amarillas en hojas'"
+          }
         },
         "completeness": {
           "type": "string",
+          "description": "sufficient si la evaluación terminó con orientación; partial en otro caso",
           "enum": [
             "partial",
             "sufficient"
-          ],
-          "description": "sufficient si la evaluación terminó con orientación; partial en otro caso"
+          ]
         },
         "assessment_id": {
           "type": "string",

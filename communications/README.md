@@ -34,13 +34,17 @@ Identidad (el número no basta) → parcela si hay varias → consentimiento →
 
 - Reportes: si nunca lo dio, se pide el permiso; si ya lo dio, solo se confirma este reporte. Si dice NO, no se guarda nada.
 - Avisos y seguimientos: solo se preguntan a un agricultor confirmado que nunca respondió.
-- Se guardan con `POST /v1/consents` (PROPUESTO) en segundo plano, con reintentos. Un número desconocido solo responde el permiso de reportes, válido para esa conversación.
+- Se guardan con `POST /v1/consents` en segundo plano, con reintentos. Un número desconocido solo responde el permiso de reportes, válido para esa conversación.
 
-**Baja.** "BAJA" revoca avisos y llamadas de seguimiento (`POST /v1/consents/revocations`, PROPUESTO) y se contesta solo tras un 200; si queda pendiente, se dice que se está procesando. No revoca el permiso de reportar. STOP y similares hacen lo mismo en el backend, pero no contestamos: Twilio contesta y bloquea el número. Una conversación en curso se cierra guardando lo recibido como parcial.
+**Baja.** "BAJA" revoca avisos y llamadas de seguimiento (`POST /v1/consents/revocations`) y se contesta solo tras un 200; si queda pendiente, se dice que se está procesando. No revoca el permiso de reportar. STOP y similares hacen lo mismo en el backend, pero no contestamos: Twilio contesta y bloquea el número. Una conversación en curso se cierra guardando lo recibido como parcial.
 
 **Seguimiento por SMS.** Respaldo tras 3 llamadas sin respuesta; lo inicia el despachador con `FollowupSmsFlow.start(item)`. Exige permiso de seguimiento, horario permitido (08:00–19:00 hora local) y, en demo, `DEMO_ALLOWED_NUMBERS`; no pisa una conversación abierta. Registra el intento `contacting` **antes** de enviar. Pregunta, una por SMS, cómo sigue la parcela (1 peor, 2 igual, 3 mejor, 4 ya se resolvió), qué hizo y si funcionó, y lo guarda con `POST /v1/followups/{id}/responses`. Sin respuesta en `FOLLOWUP_SMS_REPLY_WINDOW_MS` (24 h) registra `no_response`: nunca se declara resolución por silencio. Un envío ambiguo no se reenvía. Sin `TWILIO_ACCOUNT_SID`, los SMS salientes usan un stub.
 
 Limitación: las sesiones viven en memoria. Si el proceso se reinicia, la conversación en curso vuelve a empezar. Persistirlas requiere una tabla del Integrante 3.
+
+## Agentes de ElevenLabs
+
+Se crean y se ajustan en el panel de ElevenLabs; el código solo usa sus IDs (`ELEVENLABS_HELP_AGENT_ID`, `ELEVENLABS_FOLLOWUP_AGENT_ID`) y comprueba su configuración. Guía paso a paso y `.env` de producción: [`agents/README.md`](agents/README.md).
 
 ## Agente de ayuda (llamadas entrantes)
 
@@ -66,7 +70,7 @@ Limitación: las llamadas en curso se recuerdan en memoria. Si el proceso se rei
 | `src/sms/` | Conversación SMS (`conversation.ts`), seguimiento por SMS (`followup.ts`), tipos de sesión (`session.ts`) y textos (`messages.ts`). |
 | `src/followups/dispatcher.ts` | Despachador de `followup.due`: permiso, horario y lista blanca; hasta 3 llamadas y luego SMS. |
 | `src/tools/voice-tools.ts` | Server tools de los agentes: ayuda (`resolve_farmer`, `confirm_farmer`, `get_plot_context`, `record_consent`) y comunes (`assess_observation`, `submit_report`, `submit_followup`). |
-| `src/elevenlabs/sync-agents.ts` | `npm run agents:sync -- <help\|followup>`: sube a ElevenLabs los agentes de `agents/`. |
+| `src/elevenlabs/agents.ts` | Lee los agentes de la cuenta de ElevenLabs y comprueba su configuración (al arrancar y con `npm run agents:check`); `npm run agents:pull` guarda la copia de referencia en `agents/`. |
 | `src/backend/` | Cliente de `/v1` que valida cada respuesta (`client.ts`) y escrituras con Idempotency-Key fija y reintentos acotados (`writer.ts`). |
 | `src/twilio/`, `src/elevenlabs/` | Firma y TwiML de Twilio, envío de SMS y llamada saliente, ambos con stub. |
 | `src/policy/outreach.ts` | Contacto proactivo: consentimiento, horario local y lista blanca de demo. |
@@ -97,16 +101,20 @@ Fixtures (`src/mock-backend/fixtures.ts`, teléfonos ficticios +1 202 555 01xx; 
 
 Casos resueltos: `resolution_demo_01` (`verified`), `resolution_demo_02` (`farmer_reported`) y `resolution_demo_03` (producto y dosis: el asesor lo omite).
 
+## Backend real (Integrante 3)
+
+`backend/` y `contracts/` ya implementan las formas que propuso comunicaciones (marcadas ACORDADO en `src/contracts/resources.ts`): `contact-resolution` en dos pasos, `consents`, `consents/revocations`, `plots/{id}/context`, `reports`, `reports/{id}`, `GET /v1/followups`, `…/attempts` y `…/responses`. `test/contracts-compat.test.ts` lo comprueba contra `contracts/schemas/*.json`. Además, cada reporte con caso programa un seguimiento a los 3 min (demo).
+
+Para usarlo: `BACKEND_BASE_URL=http://<host>:8000` (con o sin `/v1`) y `BACKEND_SERVICE_TOKEN` vacío. Diferencias que comunicaciones ya absorbe:
+
+- El asesor es otro servicio (`advisor/`): `ADVISOR_BASE_URL`. Si no está corriendo, sirve el asesor del mock (`ADVISOR_BASE_URL=http://127.0.0.1:8787` con `npm run mock:backend` abierto; solo conoce las parcelas `plot_demo_*`). Sus errores llegan como `{"detail": …}`.
+- El `candidate_token` dura 15 min: SMS y voz vuelven a preguntar con quién hablan.
+- Un permiso nunca preguntado pasa a `false` en cuanto se guarda otro (solo `consent_at: null` significa "nunca").
+- El backend aún no entrega `followup.due`: hay que sondear (`FOLLOWUP_POLL_INTERVAL_MS` > 0) o disparar el curl de `/v1/followups/{id}/dispatch`.
+
 ## Pendiente de acordar con el Integrante 3
 
-Las formas marcadas `PROPUESTO` en `src/contracts/resources.ts` no están en la v2:
-
-1. **Backend real (`backend/`, `contracts/`).** Ya usa nuestras formas de `contact-resolution` (con `confirm_candidate_token`), `consents`, `consents/revocations`, `plots/{id}/context`, `reports` y `reports/{id}`; `test/contracts-compat.test.ts` lo comprueba contra `contracts/schemas/*.json`. Diferencias que comunicaciones ya absorbe: el asesor es otro servicio (`ADVISOR_BASE_URL`, `advisor/`, con errores `{"detail": …}`), no hay token de servicio (`BACKEND_SERVICE_TOKEN` vacío), la URL puede terminar en `/v1`, el `candidate_token` dura 15 min (el SMS vuelve a preguntar si caducó) y un permiso nunca preguntado pasa a `false` al guardar otro. **Falta** `GET /v1/followups`, `POST /v1/followups/{id}/responses` y `…/attempts`: sin ellas el seguimiento solo funciona con el mock (`BACKEND_BASE_URL=http://127.0.0.1:8787`).
-2. **Consentimiento:** dónde se guardan los tres permisos (`POST /v1/consents`) y el de "guardar reportes", que `Contact` no tiene. En un teléfono compartido el permiso es del contacto.
-3. **"BAJA" por SMS:** `POST /v1/consents/revocations` por teléfono.
-4. **Intentos de seguimiento:** `POST /v1/followups/{id}/attempts` (`contacting | no_response | failed`); `contacting` liga la sesión saliente a la parcela del caso.
-5. **Cómo llega `followup.due`:** `POST /v1/followups/{id}/dispatch` (cuerpo = evento outbox, 202 con el resultado), además del sondeo de `GET /v1/followups`. Falta confirmar que el worker lo llame así.
-6. **Reprogramar tras `no_response`:** asumimos que el scheduler mueve `due_at` (2 min en demo, 2 h en real; inmediato tras la 3.ª llamada, para el SMS). Así lo hace el mock.
-7. **`GET /v1/followups`:** forma de `case_summary` y `contact` (teléfono, zona horaria, horario, permisos), solo para el token `comms`.
-8. **SMS de seguimiento como `Notification`:** hoy se envía directo y se registra como intento (`channel: sms`); si se prefiere la cola de notificaciones, pasa a `/v1/notifications/{id}/dispatch` (fase 6).
-9. De la v1, sin confirmar: `plot_id: null` en reportes de números desconocidos; cuerpo de `GET /v1/reports/{id}`; estado `cancelled` en notificaciones; códigos de error `IDEMPOTENCY_KEY_REUSED`, `PLOT_NOT_CONFIRMED`, `CANDIDATE_TOKEN_INVALID`, `FARMER_NOT_CONFIRMED`, `FOLLOWUP_CLOSED`, `DEMO_MODE_MISMATCH`, `ADVISOR_UNAVAILABLE`.
+1. **Cómo llega `followup.due`** (PROPUESTO): `POST /v1/followups/{id}/dispatch` (cuerpo = evento outbox, 202 con el resultado), además del sondeo. Falta que el worker lo llame.
+2. **`guidance_given`** sale de la tabla `assessments`, pero el asesor (`advisor/`) no guarda ahí sus evaluaciones: en casos nuevos llega `null` y el agente de seguimiento dice "ninguna".
+3. **Token de servicio:** la sección 17 pide Bearer por consumidor (`comms`); el backend aún no autentica, así que cualquiera en la red ve teléfonos en `GET /v1/followups`.
+4. **SMS de seguimiento como `Notification`:** hoy se envía directo y se registra como intento (`channel: sms`); si se prefiere la cola de notificaciones, pasa a `/v1/notifications/{id}/dispatch` (fase 6), que también necesita leer la notificación en cola y reportar su estado.

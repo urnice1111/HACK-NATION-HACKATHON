@@ -14,7 +14,8 @@
     "mock:backend:dev": "tsx watch --env-file-if-exists=.env src/mock-backend/main.ts",
     "typecheck": "tsc",
     "test": "tsx --test test/*.test.ts",
-    "agents:sync": "tsx --env-file-if-exists=.env src/elevenlabs/sync-agents.ts"
+    "agents:check": "tsx --env-file-if-exists=.env src/elevenlabs/agents-cli.ts check",
+    "agents:pull": "tsx --env-file-if-exists=.env src/elevenlabs/agents-cli.ts pull"
   },
   "dependencies": {
     "twilio": "^5.13.1",

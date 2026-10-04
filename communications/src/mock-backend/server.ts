@@ -1,8 +1,8 @@
 /**
  * Mock HTTP del backend /v1 (Integrante 3) y del asesor (Integrante 2), con
  * cuerpos del contrato v2, para desarrollar las herramientas de voz y los
- * webhooks antes de integrar. Las rutas marcadas PROPUESTO no están en la v2
- * (ver src/contracts/resources.ts).
+ * webhooks sin el backend real. Las rutas marcadas ACORDADO no están en la v2
+ * pero el backend ya las implementa igual (ver src/contracts/resources.ts).
  * Respeta las convenciones de la sección 8: errores uniformes, request_id,
  * correlation_id, Idempotency-Key con 409 ante otro cuerpo, `null` como
  * desconocido e `is_demo` en todo. Solo acepta datos demo.
@@ -274,7 +274,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     return { status: 200, body: report };
   }
 
-  /** PROPUESTO: `GET /v1/followups?status=…&due_before=…`, con resumen del caso y contacto. */
+  /** ACORDADO: `GET /v1/followups?status=…&due_before=…`, con resumen del caso y contacto. */
   function listFollowups(ctx: Ctx): Reply {
     const statusParam = ctx.query.get("status");
     const status = statusParam === null ? null : FollowupStatus.safeParse(statusParam);
@@ -328,7 +328,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     return { status: 200, body };
   }
 
-  /** PROPUESTO: `POST /v1/followups/{id}/attempts`. */
+  /** ACORDADO: `POST /v1/followups/{id}/attempts`. */
   function followupAttempt(ctx: Ctx, followupId: string, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(FollowupAttemptRequest, raw);
@@ -352,7 +352,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
       // Sin respuesta no cambia el caso ni el riesgo: solo el estado del seguimiento.
       followup.status = body.status;
       if (body.status === "no_response" && followup.channel === "voice") {
-        // PROPUESTO: el scheduler reprograma el reintento (2 min en demo); agotadas las llamadas, el SMS va ya.
+        // Como el backend: el scheduler reprograma el reintento (2 min en demo); agotadas las llamadas, el SMS va ya.
         const delay = followup.attempt_count < FOLLOWUP_CALL_ATTEMPTS ? FOLLOWUP_RETRY_MS : 0;
         followup.due_at = new Date(Date.parse(state.nowIso()) + delay).toISOString();
       }
@@ -464,7 +464,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     });
   }
 
-  /** PROPUESTO: `POST /v1/consents`. Solo para el agricultor que la sesión confirmó. */
+  /** ACORDADO: `POST /v1/consents`. Solo para el agricultor que la sesión confirmó. */
   function recordConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(ConsentRequest, raw);
@@ -488,7 +488,7 @@ export function createMockBackend(options: MockBackendOptions): { server: Server
     });
   }
 
-  /** PROPUESTO: `POST /v1/consents/revocations` ("BAJA" por SMS). Un teléfono desconocido revoca 0 contactos. */
+  /** ACORDADO: `POST /v1/consents/revocations` ("BAJA" por SMS). Un teléfono desconocido revoca 0 contactos. */
   function revokeConsent(ctx: Ctx, raw: unknown): Reply {
     const key = requireIdempotencyKey(ctx.req);
     const body = parseBody(ConsentRevocationRequest, raw);

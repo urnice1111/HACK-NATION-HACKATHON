@@ -302,6 +302,20 @@ describe("reintentos y respaldo por SMS", () => {
     assert.equal(stored(next.followup_id).attempt_count, 2);
   });
 
+  it("sin sondeo: una llamada sin resultado vence con el siguiente evento y no bloquea tras resetear el backend", async () => {
+    const fresh = mockState.scheduleFollowup("case_demo_05");
+    assert.equal((await dispatcher.dispatchById(fresh.id)).status, "call_placed");
+    assert.deepEqual(await dispatcher.dispatchById(fresh.id), { status: "skipped", reason: "in_progress" });
+    await writer.drain();
+
+    // El Integrante 3 resetea el seguimiento a mano (scheduled, 0 intentos).
+    Object.assign(mockState.followups.find((f) => f.id === fresh.id)!, { status: "scheduled", attempt_count: 0, call_reference: null });
+    clock += 11 * MINUTE;
+    const again = await dispatcher.dispatchById(fresh.id);
+    assert.equal(again.status, "call_placed");
+    await writer.drain();
+  });
+
   it("fallo transitorio de ElevenLabs: espera sin registrar intento; ambiguo: registra y no repite", async () => {
     const created = mockState.scheduleFollowup("case_demo_06");
     const item = await followup(byId(created.id));

@@ -20,6 +20,8 @@ export interface CommsServerDeps {
   publicBaseUrl: string;
   twilioAuthToken: string;
   twilioPhoneNumber: string;
+  /** Otros números propios cuyos SMS también se atienden (los SMS salientes siempre salen de `twilioPhoneNumber`). */
+  extraPhoneNumbers?: string[];
   conversation: SmsConversation;
   /** Herramientas de voz; sin ellas (o sin secreto) las rutas `/v1/tools/*` responden 503. */
   voiceTools?: VoiceTools;
@@ -102,7 +104,7 @@ export function createCommsServer(deps: CommsServerDeps): Server {
     if (!messageSid) throw new HttpError(400, "VALIDATION_ERROR", "Falta MessageSid");
     const from = normalizeE164(params.From);
     const to = normalizeE164(params.To);
-    if (!from || to !== deps.twilioPhoneNumber) {
+    if (!from || !to || (to !== deps.twilioPhoneNumber && !deps.extraPhoneNumbers?.includes(to))) {
       log("warn", "sms_ignored", { request_id: requestId, message_sid: messageSid, reason: from ? "other_number" : "invalid_from" });
       sendTwiml(res, messageTwiml(null), requestId);
       return "ignored";

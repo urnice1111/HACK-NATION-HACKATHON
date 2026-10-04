@@ -17,7 +17,7 @@ export interface FixtureContact {
   id: string;
   phone_e164: string;
   is_shared: boolean;
-  /** PROPUESTO: tercer permiso de la sección 17. null = nunca se preguntó. */
+  /** ACORDADO: tercer permiso de la sección 17. null = nunca se preguntó. */
   report_consent: boolean | null;
   notification_consent: boolean | null;
   followup_call_consent: boolean | null;

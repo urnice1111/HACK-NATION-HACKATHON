@@ -1,9 +1,17 @@
 {
   "name": "Ayuda café",
   "language": "es",
+  "llm": "qwen35-397b-a17b",
   "tts": {
-    "model_id": "eleven_flash_v2_5",
-    "voice_id": "cjVigY5qzO86Huf0OWal"
+    "model_id": "eleven_v4_turbo",
+    "voice_id": "YOq2y2Up4RgXP2HyXjE5",
+    "expressive_mode": true,
+    "stability": 0.5,
+    "similarity_boost": 0.75
+  },
+  "privacy": {
+    "record_voice": false,
+    "retention_days": 30
   },
   "dynamic_variable_placeholders": {}
 }
