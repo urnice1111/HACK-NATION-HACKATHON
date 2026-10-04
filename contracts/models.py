@@ -409,15 +409,104 @@ class ResolvedCaseSearchResponse(Response):
     results: list[ResolvedCaseResult]
 
 
+class ResolutionOut(Response):
+    """Dashboard view (operators only): includes the plot, unlike the advisor search."""
+
+    resolution_id: str
+    case_id: str
+    plot_id: str
+    plot_label: str
+    threat_code: str
+    symptoms: list[str]
+    resolved_at: UtcDatetime
+    solution_statement: str | None
+    solution_codes: list[str] | None
+    matches_protocol: bool | None
+    outcome: str
+    verification: Verification
+    followup_id: str | None
+    verified_by: str | None
+    is_demo: bool
+
+
+class ResolutionList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    resolutions: list[ResolutionOut]
+
+
 # --- 10.4 Follow-up responses ------------------------------------------------------
+
+
+class FollowupCaseSummary(Response):
+    """Dynamic variables for the follow-up voice agent."""
+
+    farmer_name: str
+    threat_code: str
+    case_status: str
+    opened_at: UtcDatetime
+    symptoms: list[str]
+    guidance_given: str | None
+
+
+class AllowedHours(Response):
+    start: str
+    end: str
+
+
+class FollowupContact(Response):
+    phone_e164: str
+    preferred_language: str
+    timezone: str
+    allowed_hours: AllowedHours | None
+    followup_call_consent: bool
+    notification_consent: bool
+
+
+class FollowupListItem(Response):
+    followup_id: str
+    case_id: str
+    plot_id: str
+    due_at: UtcDatetime
+    status: str
+    channel: Literal["voice", "sms"]
+    attempt_count: int
+    questionnaire_version: str
+    call_reference: str | None
+    case_summary: FollowupCaseSummary
+    contact: FollowupContact
+    is_demo: bool
+
+
+class FollowupList(Response):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    followups: list[FollowupListItem]
+    next_cursor: str | None = None
+    is_demo: bool
+
+
+class FollowupAttemptRequest(Request):
+    schema_version: SchemaVersion = SCHEMA_VERSION
+    session_id: str
+    status: Literal["contacting", "no_response", "failed"]
+    channel: Literal["voice", "sms"]
+    call_reference: str | None = None
+    occurred_at: datetime
+    is_demo: bool = True
+
+
+class FollowupAttemptRecorded(Response):
+    followup_id: str
+    status: str
+    attempt_count: int
+    is_demo: bool
 
 
 class FollowUpResponseRequest(Request):
     schema_version: SchemaVersion = SCHEMA_VERSION
     session_id: str
-    channel: Channel
+    channel: Literal["voice", "sms"]
     status_reported: StatusReported
-    user_statement: str | None = None
+    user_statement: str
     actions_taken: str | None = None
     action_worked: ActionWorked = ActionWorked.unknown
     change_noticed_at: datetime | None = None

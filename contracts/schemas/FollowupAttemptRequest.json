@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "contacting",
+        "no_response",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "channel": {
+      "enum": [
+        "voice",
+        "sms"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "call_reference": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call Reference"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "is_demo": {
+      "default": true,
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "session_id",
+    "status",
+    "channel",
+    "occurred_at"
+  ],
+  "title": "FollowupAttemptRequest",
+  "type": "object"
+}

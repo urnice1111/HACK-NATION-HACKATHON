@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "AllowedHours": {
+      "properties": {
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "AllowedHours",
+      "type": "object"
+    },
+    "FollowupCaseSummary": {
+      "description": "Dynamic variables for the follow-up voice agent.",
+      "properties": {
+        "farmer_name": {
+          "title": "Farmer Name",
+          "type": "string"
+        },
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "case_status": {
+          "title": "Case Status",
+          "type": "string"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "symptoms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symptoms",
+          "type": "array"
+        },
+        "guidance_given": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Guidance Given"
+        }
+      },
+      "required": [
+        "farmer_name",
+        "threat_code",
+        "case_status",
+        "opened_at",
+        "symptoms",
+        "guidance_given"
+      ],
+      "title": "FollowupCaseSummary",
+      "type": "object"
+    },
+    "FollowupContact": {
+      "properties": {
+        "phone_e164": {
+          "title": "Phone E164",
+          "type": "string"
+        },
+        "preferred_language": {
+          "title": "Preferred Language",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "allowed_hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AllowedHours"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "followup_call_consent": {
+          "title": "Followup Call Consent",
+          "type": "boolean"
+        },
+        "notification_consent": {
+          "title": "Notification Consent",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "phone_e164",
+        "preferred_language",
+        "timezone",
+        "allowed_hours",
+        "followup_call_consent",
+        "notification_consent"
+      ],
+      "title": "FollowupContact",
+      "type": "object"
+    },
+    "FollowupListItem": {
+      "properties": {
+        "followup_id": {
+          "title": "Followup Id",
+          "type": "string"
+        },
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "plot_id": {
+          "title": "Plot Id",
+          "type": "string"
+        },
+        "due_at": {
+          "format": "date-time",
+          "title": "Due At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "voice",
+            "sms"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "attempt_count": {
+          "title": "Attempt Count",
+          "type": "integer"
+        },
+        "questionnaire_version": {
+          "title": "Questionnaire Version",
+          "type": "string"
+        },
+        "call_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Call Reference"
+        },
+        "case_summary": {
+          "$ref": "#/$defs/FollowupCaseSummary"
+        },
+        "contact": {
+          "$ref": "#/$defs/FollowupContact"
+        },
+        "is_demo": {
+          "title": "Is Demo",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "followup_id",
+        "case_id",
+        "plot_id",
+        "due_at",
+        "status",
+        "channel",
+        "attempt_count",
+        "questionnaire_version",
+        "call_reference",
+        "case_summary",
+        "contact",
+        "is_demo"
+      ],
+      "title": "FollowupListItem",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "followups": {
+      "items": {
+        "$ref": "#/$defs/FollowupListItem"
+      },
+      "title": "Followups",
+      "type": "array"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Next Cursor"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "followups",
+    "is_demo"
+  ],
+  "title": "FollowupList",
+  "type": "object"
+}
