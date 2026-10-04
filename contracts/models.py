@@ -90,6 +90,80 @@ class Answer(Request):
         return self
 
 
+# --- Contact resolution and plot context ----------------------------------------------
+
+
+class ContactResolutionRequest(Request):
+    phone_e164: str = Field(pattern=r"^\+[1-9][0-9]{7,14}$")
+    session_id: str
+
+
+class ContactCandidate(Response):
+    """Minimal label only; personal data is released after confirmation."""
+
+    candidate_token: str
+    label: str
+
+
+class ContactResolutionResponse(Response):
+    candidates: list[ContactCandidate]
+    requires_confirmation: bool
+
+
+class ContactConfirmRequest(Request):
+    candidate_token: str
+    session_id: str
+
+
+class ConfirmedPlot(Response):
+    plot_id: str
+    name: str
+
+
+class ContactConfirmResponse(Response):
+    farmer_id: str
+    farmer_name: str
+    preferred_language: str
+    plots: list[ConfirmedPlot]
+    notification_consent: bool
+    followup_call_consent: bool
+
+
+class ActiveCase(Response):
+    case_id: str
+    threat_code: str
+    status: str
+    opened_at: datetime
+    last_observation_at: datetime | None
+
+
+class CurrentRisk(Response):
+    threat_code: str
+    inspection_priority: InspectionPriority
+    score: Unit | None
+    reasons: list[str] = []
+    model_version: str | None
+    heuristic: bool
+
+
+class EnvironmentSummary(Response):
+    computed_at: datetime | None
+    features: dict[str, Any]
+    data_freshness: DataFreshness
+
+
+class PlotContext(Response):
+    plot_id: str
+    name: str
+    crop: str | None
+    variety: str | None
+    altitude_m: float | None
+    active_cases: list[ActiveCase]
+    risk: list[CurrentRisk]
+    environment_summary: EnvironmentSummary
+    is_demo: bool
+
+
 # --- 10.1 Assessments ---------------------------------------------------------
 
 

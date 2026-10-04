@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "candidate_token": {
+      "title": "Candidate Token",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidate_token",
+    "session_id"
+  ],
+  "title": "ContactConfirmRequest",
+  "type": "object"
+}

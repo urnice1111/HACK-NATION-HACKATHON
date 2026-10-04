@@ -9,7 +9,7 @@ cd "$(dirname "$0")/../.."
 
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
 drop table if exists
-  public.idempotency_keys, public.outbox_events, public.case_resolutions, public.notifications,
+  public.graph_versions, public.idempotency_keys, public.outbox_events, public.case_resolutions, public.notifications,
   public.followups, public.alerts, public.edges, public.risk_evaluations, public.risk_models,
   public.assessments, public.reports, public.cases, public.plots, public.farmers, public.contacts
   cascade;
@@ -23,5 +23,9 @@ done
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q \
   -v artifact="$(cat contracts/fixtures/risk_model_heuristic.json)" \
   -f backend/seed/demo_seed.sql
+
+if [[ "${SKIP_ENV_MOCK:-0}" != "1" ]]; then
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f backend/seed/env_mock.sql
+fi
 
 echo "Database reset with demo seed."

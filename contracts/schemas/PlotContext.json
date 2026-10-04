@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "ActiveCase": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "opened_at": {
+          "format": "date-time",
+          "title": "Opened At",
+          "type": "string"
+        },
+        "last_observation_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Observation At"
+        }
+      },
+      "required": [
+        "case_id",
+        "threat_code",
+        "status",
+        "opened_at",
+        "last_observation_at"
+      ],
+      "title": "ActiveCase",
+      "type": "object"
+    },
+    "CurrentRisk": {
+      "properties": {
+        "threat_code": {
+          "title": "Threat Code",
+          "type": "string"
+        },
+        "inspection_priority": {
+          "$ref": "#/$defs/InspectionPriority"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "model_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Version"
+        },
+        "heuristic": {
+          "title": "Heuristic",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "threat_code",
+        "inspection_priority",
+        "score",
+        "model_version",
+        "heuristic"
+      ],
+      "title": "CurrentRisk",
+      "type": "object"
+    },
+    "DataFreshness": {
+      "enum": [
+        "fresh",
+        "stale",
+        "unknown"
+      ],
+      "title": "DataFreshness",
+      "type": "string"
+    },
+    "EnvironmentSummary": {
+      "properties": {
+        "computed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Computed At"
+        },
+        "features": {
+          "additionalProperties": true,
+          "title": "Features",
+          "type": "object"
+        },
+        "data_freshness": {
+          "$ref": "#/$defs/DataFreshness"
+        }
+      },
+      "required": [
+        "computed_at",
+        "features",
+        "data_freshness"
+      ],
+      "title": "EnvironmentSummary",
+      "type": "object"
+    },
+    "InspectionPriority": {
+      "enum": [
+        "unknown",
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "InspectionPriority",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "plot_id": {
+      "title": "Plot Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "crop": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Crop"
+    },
+    "variety": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Variety"
+    },
+    "altitude_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Altitude M"
+    },
+    "active_cases": {
+      "items": {
+        "$ref": "#/$defs/ActiveCase"
+      },
+      "title": "Active Cases",
+      "type": "array"
+    },
+    "risk": {
+      "items": {
+        "$ref": "#/$defs/CurrentRisk"
+      },
+      "title": "Risk",
+      "type": "array"
+    },
+    "environment_summary": {
+      "$ref": "#/$defs/EnvironmentSummary"
+    },
+    "is_demo": {
+      "title": "Is Demo",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "plot_id",
+    "name",
+    "crop",
+    "variety",
+    "altitude_m",
+    "active_cases",
+    "risk",
+    "environment_summary",
+    "is_demo"
+  ],
+  "title": "PlotContext",
+  "type": "object"
+}

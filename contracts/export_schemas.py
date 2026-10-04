@@ -10,6 +10,11 @@ from contracts import models
 
 EXPORTED = [
     models.ErrorResponse,
+    models.ContactResolutionRequest,
+    models.ContactResolutionResponse,
+    models.ContactConfirmRequest,
+    models.ContactConfirmResponse,
+    models.PlotContext,
     models.AssessmentRequest,
     models.AssessmentResponse,
     models.EnvQueryRequest,

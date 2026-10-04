@@ -1,0 +1,245 @@
+/**
+ * Cliente del backend /v1 para las server tools y los webhooks. No confía en
+ * el backend ni en el modelo: valida cada respuesta contra el contrato, y un
+ * timeout en una escritura se reporta como resultado ambiguo (`timeout`) para
+ * reintentar con la MISMA Idempotency-Key, nunca con una nueva.
+ */
+import { randomUUID } from "node:crypto";
+import type { z } from "zod";
+import {
+  AssessmentResponse,
+  ConsentRecorded,
+  ConsentRevoked,
+  ContactResolutionResponse,
+  ErrorBody,
+  FollowupAttemptRecorded,
+  FollowupList,
+  FollowupResponseCreated,
+  PlotContext,
+  ReportCreated,
+  ReportDetail,
+  type AssessmentRequest,
+  type ConsentRequest,
+  type ConsentRevocationRequest,
+  type ContactResolutionRequest,
+  type FollowupAttemptRequest,
+  type FollowupResponseRequest,
+  type FollowupStatus,
+  type ReportRequest,
+} from "../contracts/index.ts";
+
+export interface BackendClientOptions {
+  baseUrl: string;
+  serviceToken: string;
+  timeoutMs?: number;
+  fetch?: typeof fetch;
+}
+
+export interface CallOptions {
+  /** `correlation_id` de la sesión; normalmente el session_id. */
+  correlationId?: string;
+  requestId?: string;
+  /** Solo para el mock: ver X-Mock-Scenario en src/mock-backend/server.ts. */
+  mockScenario?: string;
+}
+
+export type BackendResult<T> =
+  | { ok: true; status: number; data: T; requestId: string; replayed: boolean }
+  | {
+      ok: false;
+      /** http: el backend respondió con error. timeout: no se sabe si la escritura ocurrió. */
+      kind: "http" | "timeout" | "network" | "invalid_response";
+      status: number | null;
+      code: string;
+      retryable: boolean;
+      requestId: string;
+    };
+
+/** Clave estable por sesión y turno (CLAUDE.md): `report-<session_id>-turn-<nn>`. */
+export function reportIdempotencyKey(sessionId: string, turn: number): string {
+  return `report-${sessionId}-turn-${String(turn).padStart(2, "0")}`;
+}
+
+export function followupIdempotencyKey(followupId: string, sessionId: string): string {
+  return `followup-${followupId}-${sessionId}`;
+}
+
+/** Un intento por sesión y estado: repetir el callback del proveedor no cuenta otro intento. */
+export function followupAttemptIdempotencyKey(followupId: string, sessionId: string, status: string): string {
+  return `followup-attempt-${followupId}-${sessionId}-${status}`;
+}
+
+export function consentIdempotencyKey(sessionId: string): string {
+  return `consent-${sessionId}`;
+}
+
+/** La baja se deduplica por el MessageSid del SMS que la pidió. */
+export function revocationIdempotencyKey(messageSid: string): string {
+  return `revocation-${messageSid}`;
+}
+
+export class BackendClient {
+  private readonly baseUrl: string;
+  private readonly timeoutMs: number;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(private readonly options: BackendClientOptions) {
+    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.timeoutMs = options.timeoutMs ?? 8000;
+    this.fetchImpl = options.fetch ?? fetch;
+  }
+
+  static fromEnv(): BackendClient {
+    const baseUrl = process.env.BACKEND_BASE_URL;
+    const serviceToken = process.env.BACKEND_SERVICE_TOKEN;
+    if (!baseUrl || !serviceToken) throw new Error("Faltan BACKEND_BASE_URL o BACKEND_SERVICE_TOKEN");
+    return new BackendClient({ baseUrl, serviceToken, timeoutMs: Number(process.env.BACKEND_TIMEOUT_MS ?? 8000) });
+  }
+
+  resolveContact(body: ContactResolutionRequest, opts: CallOptions = {}) {
+    return this.call("POST", "/v1/contact-resolution", ContactResolutionResponse, { body, opts: withSession(opts, body.session_id) });
+  }
+
+  /** Solo tras confirmar la parcela; la sesión viaja en X-Session-Id. */
+  getPlotContext(plotId: string, sessionId: string, opts: CallOptions = {}) {
+    return this.call("GET", `/v1/plots/${encodeURIComponent(plotId)}/context`, PlotContext, {
+      opts: withSession(opts, sessionId),
+      headers: { "X-Session-Id": sessionId },
+    });
+  }
+
+  assess(body: AssessmentRequest, opts: CallOptions = {}) {
+    return this.call("POST", "/v1/assessments", AssessmentResponse, { body, opts: withSession(opts, body.session_id) });
+  }
+
+  submitReport(body: ReportRequest, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", "/v1/reports", ReportCreated, {
+      body,
+      opts: withSession(opts, body.session_id),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
+  getReport(reportId: string, opts: CallOptions = {}) {
+    return this.call("GET", `/v1/reports/${encodeURIComponent(reportId)}`, ReportDetail, { opts });
+  }
+
+  submitFollowupResponse(followupId: string, body: FollowupResponseRequest, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", `/v1/followups/${encodeURIComponent(followupId)}/responses`, FollowupResponseCreated, {
+      body,
+      opts: withSession(opts, body.session_id),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
+  /** PROPUESTO: seguimientos con resumen del caso y contacto (solo token `comms`). */
+  listFollowups(status: FollowupStatus, filters: { dueBefore?: string } = {}, opts: CallOptions = {}) {
+    const query = new URLSearchParams({ status });
+    if (filters.dueBefore) query.set("due_before", filters.dueBefore);
+    return this.call("GET", `/v1/followups?${query}`, FollowupList, { opts });
+  }
+
+  /** PROPUESTO: registra un intento de contacto; `contacting` liga la sesión a la parcela del caso. */
+  recordFollowupAttempt(followupId: string, body: FollowupAttemptRequest, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", `/v1/followups/${encodeURIComponent(followupId)}/attempts`, FollowupAttemptRecorded, {
+      body,
+      opts: withSession(opts, body.session_id),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
+  /** PROPUESTO: guarda los tres permisos de la sección 17. */
+  recordConsent(body: ConsentRequest, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", "/v1/consents", ConsentRecorded, {
+      body,
+      opts: withSession(opts, body.session_id),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
+  /** PROPUESTO: "BAJA" por SMS. */
+  revokeConsent(body: ConsentRevocationRequest, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", "/v1/consents/revocations", ConsentRevoked, {
+      body,
+      opts,
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
+  private async call<T extends z.ZodType>(
+    method: "GET" | "POST",
+    path: string,
+    schema: T,
+    { body, opts, headers = {} }: { body?: unknown; opts: CallOptions; headers?: Record<string, string> },
+  ): Promise<BackendResult<z.infer<T>>> {
+    const requestId = opts.requestId ?? `req_${randomUUID()}`;
+    const requestHeaders: Record<string, string> = {
+      Authorization: `Bearer ${this.options.serviceToken}`,
+      Accept: "application/json",
+      "X-Request-Id": requestId,
+      ...headers,
+    };
+    if (body !== undefined) requestHeaders["Content-Type"] = "application/json";
+    if (opts.correlationId) requestHeaders["X-Correlation-Id"] = opts.correlationId;
+    if (opts.mockScenario) requestHeaders["X-Mock-Scenario"] = opts.mockScenario;
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+        method,
+        headers: requestHeaders,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
+      return {
+        ok: false,
+        kind: timedOut ? "timeout" : "network",
+        status: null,
+        code: timedOut ? "TIMEOUT" : "NETWORK_ERROR",
+        retryable: true,
+        requestId,
+      };
+    }
+
+    const echoedRequestId = response.headers.get("x-request-id") ?? requestId;
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return invalid(response.status, echoedRequestId);
+    }
+
+    if (!response.ok) {
+      const parsedError = ErrorBody.safeParse(payload);
+      if (!parsedError.success) return invalid(response.status, echoedRequestId);
+      return {
+        ok: false,
+        kind: "http",
+        status: response.status,
+        code: parsedError.data.error.code,
+        retryable: parsedError.data.error.retryable,
+        requestId: parsedError.data.error.request_id,
+      };
+    }
+
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) return invalid(response.status, echoedRequestId);
+    return {
+      ok: true,
+      status: response.status,
+      data: parsed.data,
+      requestId: echoedRequestId,
+      replayed: response.headers.get("idempotency-replayed") === "true",
+    };
+  }
+}
+
+function withSession(opts: CallOptions, sessionId: string): CallOptions {
+  return { ...opts, correlationId: opts.correlationId ?? sessionId };
+}
+
+function invalid(status: number, requestId: string) {
+  return { ok: false as const, kind: "invalid_response" as const, status, code: "INVALID_RESPONSE", retryable: false, requestId };
+}
