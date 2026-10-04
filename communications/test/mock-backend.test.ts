@@ -637,6 +637,29 @@ describe("cliente", () => {
     ]);
   });
 
+  it("ADVISOR_TIMEOUT_MS applies only to assess(): a slow advisor answers, a slow backend call times out", async () => {
+    const session = newSession();
+    const plotId = await confirmFirst(session, KNOWN_PHONE);
+    const tight = new BackendClient({ baseUrl, serviceToken: TOKEN, timeoutMs: 100, advisorTimeoutMs: 2000 });
+    const assessed = await tight.assess(
+      {
+        schema_version: SCHEMA_VERSION,
+        session_id: session,
+        plot_id: plotId,
+        language: "en",
+        observation: { observed_at: null, symptoms: [], user_statement: "spots", measurements: [], answers: [], completeness: "partial" },
+        asked_need_codes: [],
+        plot_context: { crop: "coffee", variety: null },
+        is_demo: true,
+      },
+      { mockScenario: "delay:300" },
+    );
+    assert.ok(assessed.ok, "the advisor gets its own, longer timeout");
+    const context = await tight.getPlotContext(plotId, session, { mockScenario: "delay:300" });
+    assert.ok(!context.ok);
+    assert.equal(context.kind, "timeout");
+  });
+
   it("an error without the uniform shape (the advisor's FastAPI) is an HTTP error with its code", async () => {
     const reply = (status: number, body: unknown) =>
       new BackendClient({ baseUrl, fetch: (async () => new Response(JSON.stringify(body), { status })) as typeof fetch });

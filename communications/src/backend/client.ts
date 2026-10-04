@@ -15,6 +15,8 @@ import {
   FollowupAttemptRecorded,
   FollowupList,
   FollowupResponseCreated,
+  NotificationList,
+  NotificationStatusRecorded,
   PlotContext,
   ReportCreated,
   ReportDetail,
@@ -25,6 +27,8 @@ import {
   type FollowupAttemptRequest,
   type FollowupResponseRequest,
   type FollowupStatus,
+  type NotificationStatus,
+  type NotificationStatusUpdate,
   type ReportRequest,
 } from "../contracts/index.ts";
 
@@ -35,6 +39,8 @@ export interface BackendClientOptions {
   /** Without a token no `Authorization` is sent (the real backend doesn't authenticate services yet). */
   serviceToken?: string | null;
   timeoutMs?: number;
+  /** Only for `assess()`: the real advisor (LLM with internal queries) is slower than the backend. Defaults to `timeoutMs`. */
+  advisorTimeoutMs?: number | null;
   fetch?: typeof fetch;
 }
 
@@ -67,12 +73,14 @@ export class BackendClient {
   private readonly baseUrl: string;
   private readonly advisorBaseUrl: string;
   private readonly timeoutMs: number;
+  private readonly advisorTimeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: BackendClientOptions) {
     this.baseUrl = origin(options.baseUrl);
     this.advisorBaseUrl = origin(options.advisorBaseUrl || options.baseUrl);
     this.timeoutMs = options.timeoutMs ?? 8000;
+    this.advisorTimeoutMs = options.advisorTimeoutMs ?? this.timeoutMs;
     this.fetchImpl = options.fetch ?? fetch;
   }
 
@@ -93,6 +101,7 @@ export class BackendClient {
       body,
       opts: withSession(opts, body.session_id),
       baseUrl: this.advisorBaseUrl,
+      timeoutMs: this.advisorTimeoutMs,
     });
   }
 
@@ -164,6 +173,21 @@ export class BackendClient {
     });
   }
 
+  /** Voice notifications (approved alerts) with the contact to dial (`comms` token only). */
+  listNotifications(status: NotificationStatus, filters: { channel?: "voice" | "sms"; limit?: number } = {}, opts: CallOptions = {}) {
+    const query = new URLSearchParams({ status, channel: filters.channel ?? "voice", limit: String(filters.limit ?? 50) });
+    return this.call("GET", `/v1/notifications?${query}`, NotificationList, { opts });
+  }
+
+  /** Reports a delivery state change; a terminal notification answers `applied: false`. */
+  updateNotificationStatus(notificationId: string, body: NotificationStatusUpdate, idempotencyKey: string, opts: CallOptions = {}) {
+    return this.call("POST", `/v1/notifications/${encodeURIComponent(notificationId)}/status`, NotificationStatusRecorded, {
+      body,
+      opts,
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+  }
+
   private async call<T extends z.ZodType>(
     method: "GET" | "POST",
     path: string,
@@ -173,7 +197,8 @@ export class BackendClient {
       opts,
       headers = {},
       baseUrl = this.baseUrl,
-    }: { body?: unknown; opts: CallOptions; headers?: Record<string, string>; baseUrl?: string },
+      timeoutMs = this.timeoutMs,
+    }: { body?: unknown; opts: CallOptions; headers?: Record<string, string>; baseUrl?: string; timeoutMs?: number },
   ): Promise<BackendResult<z.infer<T>>> {
     const requestId = opts.requestId ?? `req_${randomUUID()}`;
     const requestHeaders: Record<string, string> = {
@@ -192,7 +217,7 @@ export class BackendClient {
         method,
         headers: requestHeaders,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       const timedOut = error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");

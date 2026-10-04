@@ -8,13 +8,16 @@
  *    with parameters the `/v1/tools/*` routes accept;
  *  - `session_id` and the IDs come from variables, never from the model;
  *  - the prompt only uses variables communications sends;
- *  - the help number answers with the help agent and the follow-up number allows outbound calls.
+ *  - the help number answers with the help agent and the follow-up number (used by the
+ *    follow-up and Alerts agents) allows outbound calls.
  *
  * It also builds the reference copy that `npm run agents:pull` saves into agents/.
  */
 import { z } from "zod";
+import { ALERT_DYNAMIC_VARIABLES } from "../alerts/dispatcher.ts";
 import { FOLLOWUP_DYNAMIC_VARIABLES } from "../followups/dispatcher.ts";
 import {
+  AcknowledgeAlertInput,
   AssessObservationInput,
   ConfirmFarmerInput,
   GetPlotContextInput,
@@ -24,7 +27,9 @@ import {
   SubmitReportInput,
 } from "../tools/voice-tools.ts";
 
-export type AgentRole = "help" | "followup";
+export type AgentRole = "help" | "followup" | "alert";
+/** Numbers: inbound (help) and outbound (follow-up and Alerts agents). */
+export type PhoneRole = "help" | "followup";
 
 /** What each agent needs from the account to work with this code. */
 export const AGENT_SPECS: Record<AgentRole, { label: string; sessionVariable: string; tools: string[]; variables: readonly string[] }> = {
@@ -40,6 +45,12 @@ export const AGENT_SPECS: Record<AgentRole, { label: string; sessionVariable: st
     tools: ["submit_followup", "assess_observation", "submit_report"],
     variables: FOLLOWUP_DYNAMIC_VARIABLES,
   },
+  alert: {
+    label: "alert agent",
+    sessionVariable: "session_id",
+    tools: ["acknowledge_alert"],
+    variables: ALERT_DYNAMIC_VARIABLES,
+  },
 };
 
 const TOOL_INPUTS: Record<string, z.ZodObject> = {
@@ -50,6 +61,7 @@ const TOOL_INPUTS: Record<string, z.ZodObject> = {
   assess_observation: AssessObservationInput,
   submit_report: SubmitReportInput,
   submit_followup: SubmitFollowupInput,
+  acknowledge_alert: AcknowledgeAlertInput,
 };
 
 // --- ElevenLabs API shapes (only what is validated; the rest is ignored) ---
@@ -222,6 +234,10 @@ export function toolProblems(tool: AgentTool, role: AgentRole, publicBaseUrl: st
   if (sessionVariable !== AGENT_SPECS[role].sessionVariable) {
     add(`session_id must come from the dynamic variable ${AGENT_SPECS[role].sessionVariable}${sessionVariable ? ` (currently ${sessionVariable})` : ""}`);
   }
+  // IDs the dispatcher sends (followup_id, plot_id, notification_id) are never written by the model.
+  for (const key of Object.keys(properties).filter((k) => k !== "session_id" && k.endsWith("_id") && AGENT_SPECS[role].variables.includes(k))) {
+    if (properties[key]!.dynamic_variable !== key) add(`${key} must come from the dynamic variable ${key}`);
+  }
   for (const variable of body ? dynamicVariablesIn(body) : []) {
     if (!allowedVariable(variable, role)) add(`uses the variable {{${variable}}}, which communications doesn't send to this agent`);
   }
@@ -267,7 +283,7 @@ export interface PhoneConfig {
  * Each agent's number. With two numbers: `HELP_AGENT_TELEPHONE_ID` answers inbound calls and
  * `FOLLOW_UP_AGENT_PHONE_ID` places outbound ones. With one, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` does both.
  */
-export function phonesFromEnv(get: (name: string) => string | null | undefined): Record<AgentRole, PhoneConfig> {
+export function phonesFromEnv(get: (name: string) => string | null | undefined): Record<PhoneRole, PhoneConfig> {
   const shared = get("ELEVENLABS_AGENT_PHONE_NUMBER_ID") || null;
   const phone = (idVariable: string, e164Variable: string): PhoneConfig => {
     const own = get(idVariable) || null;
@@ -279,7 +295,8 @@ export function phonesFromEnv(get: (name: string) => string | null | undefined):
 export interface AgentsConfig {
   helpAgentId: string | null;
   followupAgentId: string | null;
-  phones: Record<AgentRole, PhoneConfig>;
+  alertAgentId: string | null;
+  phones: Record<PhoneRole, PhoneConfig>;
   publicBaseUrl: string | null;
 }
 
@@ -291,7 +308,7 @@ export interface AgentsCheck {
   agents: Partial<Record<AgentRole, AgentRecord>>;
 }
 
-function phoneProblems(role: AgentRole, number: PhoneNumberRecord, phone: PhoneConfig, config: AgentsConfig): string[] {
+function phoneProblems(role: PhoneRole, number: PhoneNumberRecord, phone: PhoneConfig, config: AgentsConfig): string[] {
   const problems: string[] = [];
   if (phone.e164 && number.phone_number && number.phone_number !== phone.e164) {
     problems.push(`${phone.variable} is ${number.phone_number}, not ${phone.e164}`);
@@ -303,9 +320,11 @@ function phoneProblems(role: AgentRole, number: PhoneNumberRecord, phone: PhoneC
     }
   } else {
     if (number.supports_outbound === false) problems.push("doesn't support outbound calls");
-    // If the farmer calls back the number that called them, the follow-up agent would answer without its variables.
-    if (phone.id !== config.phones.help.id && config.followupAgentId && number.assigned_agent?.agent_id === config.followupAgentId) {
-      problems.push("answers inbound calls with the follow-up agent, which doesn't work without its variables; assign the help agent for people who call back");
+    // If the farmer calls back the number that called them, an outbound agent would answer without its variables.
+    const assigned = number.assigned_agent?.agent_id;
+    if (phone.id !== config.phones.help.id && assigned && (assigned === config.followupAgentId || assigned === config.alertAgentId)) {
+      const agent = assigned === config.followupAgentId ? "follow-up" : "alert";
+      problems.push(`answers inbound calls with the ${agent} agent, which doesn't work without its variables; assign the help agent for people who call back`);
     }
   }
   return problems.map((p) => `${role === "help" ? "help" : "follow-up"} number: ${p}`);
@@ -317,6 +336,7 @@ export async function checkAgents(api: AgentsApi, config: AgentsConfig): Promise
   const ids: [AgentRole, string | null, string][] = [
     ["help", config.helpAgentId, "ELEVENLABS_HELP_AGENT_ID"],
     ["followup", config.followupAgentId, "ELEVENLABS_FOLLOWUP_AGENT_ID"],
+    ["alert", config.alertAgentId, "ELEVENLABS_ALERT_AGENT_ID"],
   ];
   for (const [role, id, variable] of ids) {
     if (!id) {

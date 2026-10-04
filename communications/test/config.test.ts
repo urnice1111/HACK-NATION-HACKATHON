@@ -33,7 +33,7 @@ describe("configuration", () => {
     assert.throws(
       () => loadConfig({ ...base, IS_DEMO: "false" }),
       (error: Error) =>
-        ["TWILIO_ACCOUNT_SID", "ELEVENLABS_API_KEY", "ELEVENLABS_HELP_AGENT_ID", "ELEVENLABS_FOLLOWUP_AGENT_ID", "HELP_AGENT_TELEPHONE_ID", "FOLLOW_UP_AGENT_PHONE_ID", "ELEVENLABS_TOOL_SECRET", "COMMS_SERVICE_TOKEN"].every((k) =>
+        ["TWILIO_ACCOUNT_SID", "ELEVENLABS_API_KEY", "ELEVENLABS_HELP_AGENT_ID", "ELEVENLABS_FOLLOWUP_AGENT_ID", "ELEVENLABS_ALERT_AGENT_ID", "HELP_AGENT_TELEPHONE_ID", "FOLLOW_UP_AGENT_PHONE_ID", "ELEVENLABS_TOOL_SECRET", "COMMS_SERVICE_TOKEN"].every((k) =>
           error.message.includes(`${k}: required with IS_DEMO=false`),
         ),
     );
@@ -44,12 +44,25 @@ describe("configuration", () => {
       ELEVENLABS_API_KEY: "k",
       ELEVENLABS_HELP_AGENT_ID: "agent_help",
       ELEVENLABS_FOLLOWUP_AGENT_ID: "agent_followup",
+      ELEVENLABS_ALERT_AGENT_ID: "agent_alert",
       ELEVENLABS_AGENT_PHONE_NUMBER_ID: "phnum_1",
       ELEVENLABS_TOOL_SECRET: "tool-secret-0123456789",
       COMMS_SERVICE_TOKEN: "comms-token-0123456789",
     };
     assert.equal(loadConfig(production).IS_DEMO, false);
     assert.throws(() => loadConfig({ ...production, PUBLIC_BASE_URL: "http://comms.example.test" }), /PUBLIC_BASE_URL: must be https/);
+  });
+
+  it("advisor timeout and alert calls: defaults and validation", () => {
+    const config = loadConfig(base);
+    assert.equal(config.ADVISOR_TIMEOUT_MS, 10_000);
+    assert.equal(config.ELEVENLABS_ALERT_AGENT_ID, null, "without the Alerts agent, alert calls are off");
+    assert.equal(config.ALERT_POLL_INTERVAL_MS, 15_000);
+    assert.equal(config.ALERT_CALL_ATTEMPTS, 3);
+    assert.equal(config.ALERT_CALL_RESULT_TIMEOUT_MS, 120_000);
+    assert.equal(loadConfig({ ...base, ADVISOR_TIMEOUT_MS: "12000", ALERT_POLL_INTERVAL_MS: "0" }).ALERT_POLL_INTERVAL_MS, 0);
+    assert.throws(() => loadConfig({ ...base, ADVISOR_TIMEOUT_MS: "0" }), /ADVISOR_TIMEOUT_MS/);
+    assert.throws(() => loadConfig({ ...base, ALERT_CALL_ATTEMPTS: "9" }), /ALERT_CALL_ATTEMPTS/);
   });
 
   it("DEMO_IGNORE_ALLOWED_HOURS with IS_DEMO=false prevents startup", () => {

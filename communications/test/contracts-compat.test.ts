@@ -28,6 +28,9 @@ import {
   FollowupList,
   FollowupResponseCreated,
   FollowupResponseRequest,
+  NotificationList,
+  NotificationStatusRecorded,
+  NotificationStatusUpdate,
   OutboxEvent,
   PlotContext,
   ReportCreated,
@@ -176,6 +179,22 @@ describe("compatibility with the backend's contracts/", { skip }, () => {
       ["assessments", AssessmentRequest, "AssessmentRequest"],
     ];
     for (const [label, schema, file] of pairs) it(label, () => check(schema, file, "request"));
+  });
+
+  /**
+   * Alert notifications (demo step 6): Member 3 implements them in parallel, so each check is
+   * skipped until its schema is published. If the backend names them differently, rename them here.
+   */
+  describe("alert notifications (skipped until contracts/schemas publishes them)", () => {
+    const pairs: [string, z.ZodType, string, Mode][] = [
+      ["notifications (list with alert and contact)", NotificationList, "NotificationList", "response"],
+      ["notifications/{id}/status (request)", NotificationStatusUpdate, "NotificationStatusUpdate", "request"],
+      ["notifications/{id}/status (response)", NotificationStatusRecorded, "NotificationStatusRecorded", "response"],
+    ];
+    for (const [label, schema, file, mode] of pairs) {
+      const missing = existsSync(new URL(`${file}.json`, SCHEMAS_DIR)) ? false : `contracts/schemas/${file}.json is not published yet`;
+      it(label, { skip: missing }, () => check(schema, file, mode));
+    }
   });
 
   it("detects divergences at the root, nested and in enums (self-check of the test)", () => {

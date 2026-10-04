@@ -15,7 +15,8 @@
     "typecheck": "tsc",
     "test": "tsx --test test/*.test.ts",
     "agents:check": "tsx --env-file-if-exists=.env src/elevenlabs/agents-cli.ts check",
-    "agents:pull": "tsx --env-file-if-exists=.env src/elevenlabs/agents-cli.ts pull"
+    "agents:pull": "tsx --env-file-if-exists=.env src/elevenlabs/agents-cli.ts pull",
+    "advisor:latency": "tsx --env-file-if-exists=.env src/backend/advisor-latency-cli.ts"
   },
   "dependencies": {
     "twilio": "^5.13.1",

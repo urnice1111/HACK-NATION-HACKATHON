@@ -6,12 +6,13 @@
  * They cover what communications needs to test (sections 13, 15 and 17): a
  * single-owner phone, a shared phone, a contact without alert or follow-up
  * consent, two plots without context, one outside dataset coverage, a due
- * follow-up, an unanswered one and three resolved cases (one `verified`, one
+ * follow-up, an unanswered one, three resolved cases (one `verified`, one
  * `farmer_reported` and one with a product and dose the advisor must leave
- * out). The agronomic content is synthetic: it tests flow and rules, not
+ * out) and two approved alerts with a queued voice notification (one to a
+ * contact that later revoked alerts). The agronomic content is synthetic: it tests flow and rules, not
  * diagnostic accuracy.
  */
-import type { CaseStatus, EnvironmentSummary, FollowupStatus, ResolutionVerification } from "../contracts/index.ts";
+import type { CaseStatus, EnvironmentSummary, FollowupStatus, NotificationStatus, ResolutionVerification } from "../contracts/index.ts";
 
 export interface FixtureContact {
   id: string;
@@ -84,6 +85,29 @@ export interface FixtureResolution {
   verified_by: string | null;
   /** Mock only: what the advisor would say. In the real system Member 2 writes it. */
   speech_summary: string | null;
+}
+
+/** Alert approved by a reviewer in the dashboard (Member 3's `alerts` table). */
+export interface FixtureAlert {
+  id: string;
+  plot_id: string;
+  threat_code: string;
+  status: "pending_review" | "approved" | "rejected" | "queued" | "cancelled";
+  message: string | null;
+}
+
+/** Delivery of an alert to one contact (Member 3's `notifications` table). */
+export interface FixtureNotification {
+  id: string;
+  alert_id: string | null;
+  contact_id: string;
+  channel: "voice" | "sms";
+  status: NotificationStatus;
+  attempt_count: number;
+  provider_reference: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export const THREAT_CODE = "coffee_leaf_rust";
@@ -251,4 +275,19 @@ export const resolutions: FixtureResolution[] = [
     verified_by: null,
     speech_summary: null,
   },
+];
+
+const ALERT_MESSAGE =
+  "Coffee leaf rust was reported on farms near your plot. Check the underside of your coffee leaves for yellow spots or orange powder, and remove and bury the affected leaves.";
+
+export const alerts: FixtureAlert[] = [
+  // Rosa's plot has no case of its own: a neighbor's case raised its risk and a reviewer approved the alert.
+  { id: "alert_demo_01", plot_id: "plot_demo_01", threat_code: THREAT_CODE, status: "approved", message: ALERT_MESSAGE },
+  // Ernesto revoked alerts after the approval: the call must be cancelled, never placed.
+  { id: "alert_demo_04", plot_id: "plot_demo_04", threat_code: THREAT_CODE, status: "approved", message: ALERT_MESSAGE },
+];
+
+export const notifications: FixtureNotification[] = [
+  { id: "notification_demo_01", alert_id: "alert_demo_01", contact_id: "contact_demo_01", channel: "voice", status: "queued", attempt_count: 0, provider_reference: null, last_error: null, created_at: "2026-10-04T15:00:00Z", updated_at: "2026-10-04T15:00:00Z" },
+  { id: "notification_demo_04", alert_id: "alert_demo_04", contact_id: "contact_demo_04", channel: "voice", status: "queued", attempt_count: 0, provider_reference: null, last_error: null, created_at: "2026-10-04T15:00:00Z", updated_at: "2026-10-04T15:00:00Z" },
 ];
